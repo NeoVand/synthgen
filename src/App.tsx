@@ -25,7 +25,6 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ScienceIcon from '@mui/icons-material/Science'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
-import SettingsIcon from '@mui/icons-material/Settings'
 import PsychologyIcon from '@mui/icons-material/Psychology'
 import SummarizeIcon from '@mui/icons-material/Summarize'
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer'
@@ -38,7 +37,6 @@ import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { getReorderDestinationIndex } from '@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index'
-
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter'
 
 // PDFJS
@@ -167,7 +165,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
   // Add state for expanded cells and sections
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
-  const [sections, setSections] = useState<Section[]>([
+  const [sections] = useState<Section[]>([
     { id: 'section-upload', title: 'Document Upload', icon: <UploadFileIcon /> },
     { id: 'section-chunking', title: 'Chunking', icon: <ExtensionIcon /> },
     { id: 'section-modelSettings', title: 'Model Settings', icon: <PsychologyIcon /> },
@@ -591,10 +589,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   }, []);
 
   // Helper to calculate TextField rows based on content
-  const calculateRows = (content: string, isExpanded: boolean, isGenerating: boolean) => {
-    if (!isExpanded && !isGenerating) return 2;
-    const lineCount = (content.match(/\n/g) || []).length + 1;
-    return Math.max(4, lineCount + 2); // No maximum, just ensure minimum height
+  const calculateRows = (content: string, isExpanded: boolean, isGenerating: boolean): number => {
+    const baseRows = 2;
+    return isExpanded ? Math.max(content.split('\n').length, baseRows) : baseRows;
   };
 
   // Add this helper for auto-scrolling
@@ -638,7 +635,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       startIndex: number;
       indexOfTarget: number;
       closestEdgeOfTarget: Edge | null;
-    }) => {
+    }): void => {
       const finishIndex = getReorderDestinationIndex({
         startIndex,
         indexOfTarget,
@@ -646,7 +643,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         axis: 'vertical',
       });
 
-      if (finishIndex === startIndex) {
+      if (startIndex === finishIndex) {
         return;
       }
 
@@ -667,7 +664,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         };
       });
     },
-    [],
+    []
   );
 
   useEffect(() => {
