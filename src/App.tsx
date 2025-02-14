@@ -16,6 +16,9 @@ import {
   IconButton,
   Collapse,
   useTheme,
+  createTheme,
+  alpha,
+  Tooltip,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StarIcon from '@mui/icons-material/Star'
@@ -32,6 +35,7 @@ import ExtensionIcon from '@mui/icons-material/Extension'
 import StopIcon from '@mui/icons-material/Stop'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import { saveAs } from 'file-saver'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
@@ -79,6 +83,7 @@ interface Section {
   id: string;
   title: string;
   icon?: React.ReactNode;
+  description: string;
 }
 
 type SectionEntry = { sectionId: string; element: HTMLElement };
@@ -123,6 +128,136 @@ function getSectionRegistry() {
   return { register, getElement };
 }
 
+// Update the theme configuration
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#3B82F6',
+      light: '#60A5FA',
+      dark: '#2563EB',
+    },
+    secondary: {
+      main: '#10B981',
+      light: '#34D399',
+      dark: '#059669',
+    },
+    background: {
+      default: '#F8FAFC',
+      paper: '#FFFFFF',
+    },
+    text: {
+      primary: '#1E293B',
+      secondary: '#64748B',
+    },
+    divider: 'rgba(0, 0, 0, 0.06)',
+  },
+  typography: {
+    fontFamily: 'var(--font-primary)',
+    h1: {
+      fontWeight: 700,
+      letterSpacing: '-0.025em',
+    },
+    h2: {
+      fontWeight: 700,
+      letterSpacing: '-0.025em',
+    },
+    h3: {
+      fontWeight: 600,
+      letterSpacing: '-0.025em',
+    },
+    h4: {
+      fontWeight: 600,
+      letterSpacing: '-0.025em',
+    },
+    h5: {
+      fontWeight: 600,
+      letterSpacing: '-0.025em',
+    },
+    h6: {
+      fontWeight: 600,
+      letterSpacing: '-0.025em',
+    },
+    subtitle1: {
+      fontWeight: 500,
+      letterSpacing: '-0.015em',
+    },
+    subtitle2: {
+      fontWeight: 500,
+      letterSpacing: '-0.015em',
+    },
+    body1: {
+      letterSpacing: '-0.01em',
+    },
+    body2: {
+      letterSpacing: '-0.01em',
+    },
+    button: {
+      fontWeight: 600,
+      letterSpacing: '-0.015em',
+    },
+  },
+  shape: {
+    borderRadius: 8,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          borderRadius: '8px',
+          fontWeight: 600,
+          boxShadow: 'none',
+          '&:hover': {
+            boxShadow: 'none',
+          },
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          borderColor: 'rgba(0, 0, 0, 0.06)',
+        },
+      },
+    },
+  },
+});
+
+// Dark mode theme
+const darkTheme = createTheme({
+  ...theme,
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#60A5FA',
+      light: '#93C5FD',
+      dark: '#3B82F6',
+    },
+    secondary: {
+      main: '#34D399',
+      light: '#6EE7B7',
+      dark: '#10B981',
+    },
+    background: {
+      default: '#0F172A',
+      paper: '#1E293B',
+    },
+    text: {
+      primary: '#F1F5F9',
+      secondary: '#94A3B8',
+    },
+    divider: 'rgba(255, 255, 255, 0.06)',
+  },
+});
+
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // 1. Model Settings
   const [ollamaSettings, setOllamaSettings] = useState<OllamaSettingsType>({
@@ -166,11 +301,36 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // Add state for expanded cells and sections
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const [sections] = useState<Section[]>([
-    { id: 'section-upload', title: 'Document Upload', icon: <UploadFileIcon /> },
-    { id: 'section-chunking', title: 'Chunking', icon: <ExtensionIcon /> },
-    { id: 'section-modelSettings', title: 'Model Settings', icon: <PsychologyIcon /> },
-    { id: 'section-summarization', title: 'Summarization', icon: <SummarizeIcon /> },
-    { id: 'section-prompts', title: 'Q&A Prompts', icon: <QuestionAnswerIcon /> },
+    { 
+      id: 'section-upload', 
+      title: 'Document Upload', 
+      icon: <UploadFileIcon />,
+      description: 'Upload your document (PDF, DOCX, TXT, CSV) to generate Q&A pairs from.'
+    },
+    { 
+      id: 'section-chunking', 
+      title: 'Chunking', 
+      icon: <ExtensionIcon />,
+      description: 'Split your document into smaller chunks for better processing. Adjust chunk size and overlap to control how the text is divided.'
+    },
+    { 
+      id: 'section-modelSettings', 
+      title: 'Model Settings', 
+      icon: <PsychologyIcon />,
+      description: 'Configure the AI model parameters to control the generation behavior.'
+    },
+    { 
+      id: 'section-summarization', 
+      title: 'Summarization', 
+      icon: <SummarizeIcon />,
+      description: 'Generate and edit a summary of your document to provide context for Q&A generation.'
+    },
+    { 
+      id: 'section-prompts', 
+      title: 'Q&A Prompts', 
+      icon: <QuestionAnswerIcon />,
+      description: 'Customize the prompts used to generate questions and answers from your document.'
+    },
   ]);
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -189,7 +349,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   const [generationType, setGenerationType] = useState<'summary' | 'qa' | null>(null)
 
   // Add state for sidebar
-  const [sidebarWidth, setSidebarWidth] = useState<number>(300);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(400);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isResizing, setIsResizing] = useState<boolean>(false);
 
@@ -280,11 +440,15 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   //------------------------------------------------------------------------------------
   const handleSummarize = async () => {
     if (isGenerating) {
-      setShouldStopGeneration(true)
+      setShouldStopGeneration(true);
       if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null; // Clear the reference
       }
-      return
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress('Summary generation stopped.');
+      return;
     }
 
     if (!rawText.trim()) {
@@ -296,31 +460,46 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       return
     }
 
-    setShouldStopGeneration(false)
-    setIsGenerating(true)
-    setGenerationType('summary')
-    setGenerationProgress('Generating summary...')
+    setShouldStopGeneration(false);
+    setIsGenerating(true);
+    setGenerationType('summary');
+    setGenerationProgress('Generating summary...');
 
     try {
-      let summaryText = ''
-      const prompt = `${summaryPrompt}\n\n${rawText}`
-      for await (const chunk of doStreamCall(prompt)) {
-        if (shouldStopGeneration) break
-        summaryText += chunk
-        setDocSummary(summaryText)
+      let summaryText = '';
+      const prompt = `${summaryPrompt}\n\n${rawText}`;
+
+      // Create new AbortController for this generation
+      abortControllerRef.current = new AbortController();
+
+      try {
+        for await (const chunk of doStreamCall(prompt)) {
+          if (shouldStopGeneration) break;
+          summaryText += chunk;
+          setDocSummary(summaryText);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          console.log('Summary generation stopped by user');
+          return; // Exit cleanly on abort
+        }
+        throw err; // Re-throw other errors
       }
     } catch (err) {
-      console.error('Error summarizing doc:', err)
+      console.error('Error summarizing doc:', err);
       if (err instanceof Error && err.name !== 'AbortError') {
-        alert('Failed to summarize document.')
+        alert('Failed to summarize document.');
       }
     } finally {
-      setIsGenerating(false)
-      setGenerationType(null)
-      setGenerationProgress(shouldStopGeneration ? 'Summary generation stopped.' : 'Summary generation complete.')
-      setShouldStopGeneration(false)
+      if (abortControllerRef.current) {
+        abortControllerRef.current = null;
+      }
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress(shouldStopGeneration ? 'Summary generation stopped.' : 'Summary generation complete.');
+      setShouldStopGeneration(false);
     }
-  }
+  };
 
   //------------------------------------------------------------------------------------
   // 4. Chunking Document
@@ -356,17 +535,20 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
   // A helper for streaming calls
   const doStreamCall = async function* (prompt: string) {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    abortControllerRef.current = new AbortController()
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    let response: Response | null = null;
     
     try {
       if (shouldStopGeneration) {
-        throw new Error('AbortError')
+        throw new Error('AbortError');
       }
 
-      const response = await fetch('http://localhost:11434/api/generate', {
+      // Create new AbortController if none exists
+      if (!abortControllerRef.current) {
+        abortControllerRef.current = new AbortController();
+      }
+      
+      response = await fetch('http://localhost:11434/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -383,65 +565,97 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           }
         }),
         signal: abortControllerRef.current.signal
-      })
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('No reader available')
-      const decoder = new TextDecoder()
+      if (!response.body) throw new Error('No response body available');
+      reader = response.body.getReader();
+      
+      const decoder = new TextDecoder();
 
       try {
         while (true) {
           if (shouldStopGeneration) {
-            throw new Error('AbortError')
+            throw new Error('AbortError');
           }
 
-          const { done, value } = await reader.read()
-          if (done) break
+          const { done, value } = await reader.read();
+          if (done) break;
 
-          const chunk = decoder.decode(value)
-          const lines = chunk.split('\n')
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
           
           for (const line of lines) {
-            if (!line) continue
+            if (!line) continue;
             if (shouldStopGeneration) {
-              throw new Error('AbortError')
+              throw new Error('AbortError');
             }
             
             try {
-              const response = JSON.parse(line)
+              const response = JSON.parse(line);
               if (response.response) {
-                yield response.response
+                yield response.response;
               }
               if (response.done) {
-                return
+                return;
               }
             } catch (e) {
               // Ignore JSON parse errors for incomplete chunks
-              continue
+              continue;
             }
           }
         }
       } finally {
-        reader.cancel()
+        // Always release the reader if we have one
+        if (reader) {
+          try {
+            await reader.cancel();
+          } catch (e) {
+            console.error('Error canceling reader:', e);
+          }
+          reader = null;
+        }
       }
     } catch (error: unknown) {
       if (error instanceof Error && (error.name === 'AbortError' || error.message === 'AbortError')) {
-        console.log('Generation stopped by user')
-        throw error // Re-throw to break out of all loops
+        // Ensure reader is cleaned up on abort
+        if (reader) {
+          try {
+            await reader.cancel();
+          } catch (e) {
+            console.error('Error canceling reader:', e);
+          }
+          reader = null;
+        }
+        console.log('Generation stopped by user');
+        throw error; // Re-throw to break out of all loops
       }
-      console.error('Streaming error:', error)
-      throw error
+      console.error('Streaming error:', error);
+      throw error;
     } finally {
+      // Final cleanup
+      if (reader) {
+        try {
+          await reader.cancel();
+        } catch (e) {
+          console.error('Error canceling reader:', e);
+        }
+      }
+      if (response && !response.bodyUsed) {
+        try {
+          await response.body?.cancel();
+        } catch (e) {
+          console.error('Error canceling response body:', e);
+        }
+      }
       if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
+        abortControllerRef.current = null;
       }
     }
-  }
+  };
 
   //------------------------------------------------------------------------------------
   // 6. Delete / Generate
@@ -495,6 +709,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         const questionPrompt = `${promptQuestion}\n\nSummary:\n${docSummary}\n\nChunk:\n${row.context}`
         
         try {
+          // Set generating flag for question
+          setQaPairs((prev) =>
+            prev.map((r) =>
+              r.id === row.id ? { ...r, generating: { question: true, answer: false } } : r
+            )
+          )
+
           for await (const chunk of doStreamCall(questionPrompt)) {
             if (shouldStopGeneration) {
               throw new Error('AbortError')
@@ -502,10 +723,17 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             questionText += chunk
             setQaPairs((prev) =>
               prev.map((r) =>
-                r.id === row.id ? { ...r, question: questionText, generating: { question: true, answer: false } } : r
+                r.id === row.id ? { ...r, question: questionText } : r
               )
             )
           }
+
+          // Reset generating flag for question after completion
+          setQaPairs((prev) =>
+            prev.map((r) =>
+              r.id === row.id ? { ...r, generating: { question: false, answer: false }, question: questionText } : r
+            )
+          )
         } catch (err) {
           if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
             throw err // Re-throw to break out of everything
@@ -524,6 +752,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${row.context}\nQuestion:\n${row.question}`
         
         try {
+          // Set generating flag for answer
+          setQaPairs((prev) =>
+            prev.map((r) =>
+              r.id === row.id ? { ...r, generating: { question: false, answer: true } } : r
+            )
+          )
+
           for await (const chunk of doStreamCall(answerPrompt)) {
             if (shouldStopGeneration) {
               throw new Error('AbortError')
@@ -531,10 +766,17 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             answerText += chunk
             setQaPairs((prev) =>
               prev.map((r) =>
-                r.id === row.id ? { ...r, answer: answerText, generating: { question: false, answer: true } } : r
+                r.id === row.id ? { ...r, answer: answerText } : r
               )
             )
           }
+
+          // Reset generating flag for answer after completion
+          setQaPairs((prev) =>
+            prev.map((r) =>
+              r.id === row.id ? { ...r, generating: { question: false, answer: false }, answer: answerText } : r
+            )
+          )
         } catch (err) {
           if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
             throw err // Re-throw to break out of everything
@@ -582,10 +824,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
   // Helper to toggle cell expansion
   const toggleCellExpansion = useCallback((rowId: number, columnType: string) => {
-    setExpandedCells(prev => ({
-      ...prev,
-      [`${rowId}-${columnType}`]: !prev[`${rowId}-${columnType}`]
-    }));
+    setExpandedCells(prev => {
+      const newState = { ...prev };
+      const key = `${rowId}-${columnType}`;
+      newState[key] = !prev[key];
+      return newState;
+    });
   }, []);
 
 
@@ -724,13 +968,33 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     });
   }, [currentSections, reorderSection]);
 
-  // Add this effect to reset expansion state after generation
+  // Add a new effect to handle cell expansion during generation
   useEffect(() => {
-    if (!isGenerating && generationType === 'qa') {
-      // Reset all expanded cells
-      setExpandedCells({});
+    // Update expanded cells based on generating state of each cell
+    setExpandedCells(prev => {
+      const newState = { ...prev };
+      qaPairs.forEach(qa => {
+        // Only set cells that are actually generating to expanded
+        newState[`${qa.id}-question`] = qa.generating?.question || false;
+        newState[`${qa.id}-answer`] = qa.generating?.answer || false;
+      });
+      return newState;
+    });
+  }, [qaPairs]); // Only depend on qaPairs changes
+
+  // Keep the reset effect for when generation completely stops
+  useEffect(() => {
+    if (!isGenerating) {
+      // Reset generating flags in qaPairs
+      setQaPairs(prev => prev.map(qa => ({
+        ...qa,
+        generating: {
+          question: false,
+          answer: false
+        }
+      })));
     }
-  }, [isGenerating, generationType]);
+  }, [isGenerating]);
 
   //------------------------------------------------------------------------------------
   //  Render UI
@@ -752,13 +1016,18 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             maxWidth: isSidebarCollapsed ? 0 : undefined,
             transition: isResizing ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             position: 'relative',
-            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#FFFFFF',
-            borderRight: isSidebarCollapsed ? 0 : `1px solid ${theme.palette.divider}`,
+            bgcolor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.background.paper, 0.4)
+              : theme.palette.background.paper,
+            borderRight: `1px solid ${theme.palette.divider}`,
             display: 'flex',
             flexDirection: 'column',
             visibility: isSidebarCollapsed ? 'hidden' : 'visible',
             opacity: isSidebarCollapsed ? 0 : 1,
-            boxShadow: theme.palette.mode === 'dark' ? 'none' : '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+            backdropFilter: 'blur(8px)',
+            boxShadow: theme.palette.mode === 'dark' 
+              ? 'none'
+              : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
           }}
         >
           {/* Sidebar Header */}
@@ -922,6 +1191,25 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       }}>
                         {section.title}
                       </Typography>
+                      <Tooltip 
+                        title={section.description} 
+                        placement="right"
+                        sx={{ mr: 1 }}
+                      >
+                        <IconButton 
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                          sx={{
+                            color: 'inherit',
+                            opacity: 0.7,
+                            mr: 1
+                          }}
+                        >
+                          <HelpOutlineIcon sx={{ fontSize: '1rem' }} />
+                        </IconButton>
+                      </Tooltip>
                       <IconButton 
                         size="small"
                         onClick={(e) => {
@@ -984,36 +1272,62 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         )}
                         {section.id === 'section-summarization' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
-                            <TextField
-                              label="Summarization Prompt"
-                              multiline
-                              rows={3}
-                              fullWidth
-                              margin="normal"
-                              value={summaryPrompt}
-                              onChange={(e) => setSummaryPrompt(e.target.value)}
-                            />
+                            <Box sx={{ mb: 2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                  Summarization Prompt
+                                </Typography>
+                                <Tooltip title="The prompt used to generate a summary of your document. The summary will be used as context for Q&A generation." placement="right">
+                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                              <TextField
+                                multiline
+                                fullWidth
+                                value={summaryPrompt}
+                                onChange={(e) => setSummaryPrompt(e.target.value)}
+                                minRows={2}
+                                maxRows={6}
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    fontSize: '0.875rem',
+                                    lineHeight: 1.6
+                                  }
+                                }}
+                              />
+                            </Box>
                             <Button
                               variant="contained"
                               color={isGenerating && generationType === 'summary' ? "error" : "primary"}
                               onClick={handleSummarize}
                               fullWidth
-                              sx={{ mt: 1 }}
+                              sx={{ mt: 1, mb: 2 }}
                               startIcon={isGenerating && generationType === 'summary' ? <StopIcon /> : <StarIcon />}
                             >
                               {isGenerating && generationType === 'summary' ? "Stop" : "Generate Summary"}
                             </Button>
-                            <Box mt={2}>
-                              <Typography variant="body2" sx={{ mb: 1 }}>
-                                Summary (editable):
-                              </Typography>
+                            <Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                  Summary (editable)
+                                </Typography>
+                                <Tooltip title="Edit this summary to refine it before generating Q&A pairs. A good summary helps generate better questions and answers." placement="right">
+                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                               <TextField
                                 multiline
-                                rows={4}
                                 fullWidth
                                 value={docSummary}
                                 onChange={(e) => setDocSummary(e.target.value)}
                                 placeholder="(Optional) Provide or edit a summary here..."
+                                minRows={6}
+                                maxRows={12}
                                 ref={(el) => {
                                   if (el) {
                                     const textarea = el.querySelector('textarea');
@@ -1024,8 +1338,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 }}
                                 sx={{
                                   '& .MuiInputBase-root': {
-                                    maxHeight: '300px',
-                                    overflow: 'auto',
+                                    borderRadius: '8px',
+                                    fontSize: '0.875rem',
+                                    lineHeight: 1.6
                                   }
                                 }}
                               />
@@ -1034,24 +1349,60 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         )}
                         {section.id === 'section-prompts' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
-                            <TextField
-                              label="Question Prompt"
-                              multiline
-                              rows={2}
-                              fullWidth
-                              margin="normal"
-                              value={promptQuestion}
-                              onChange={(e) => setPromptQuestion(e.target.value)}
-                            />
-                            <TextField
-                              label="Answer Prompt"
-                              multiline
-                              rows={2}
-                              fullWidth
-                              margin="normal"
-                              value={promptAnswer}
-                              onChange={(e) => setPromptAnswer(e.target.value)}
-                            />
+                            <Box sx={{ mb: 2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                  Question Generation Prompt
+                                </Typography>
+                                <Tooltip title="This prompt instructs the AI how to generate questions from the document chunks. The prompt should encourage clear, focused questions." placement="right">
+                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                              <TextField
+                                multiline
+                                fullWidth
+                                value={promptQuestion}
+                                onChange={(e) => setPromptQuestion(e.target.value)}
+                                minRows={3}
+                                maxRows={8}
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    fontSize: '0.875rem',
+                                    lineHeight: 1.6
+                                  }
+                                }}
+                              />
+                            </Box>
+                            <Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                  Answer Generation Prompt
+                                </Typography>
+                                <Tooltip title="This prompt instructs the AI how to generate answers to the questions. The prompt should encourage accurate, concise answers based on the document content." placement="right">
+                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                              <TextField
+                                multiline
+                                fullWidth
+                                value={promptAnswer}
+                                onChange={(e) => setPromptAnswer(e.target.value)}
+                                minRows={3}
+                                maxRows={8}
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    fontSize: '0.875rem',
+                                    lineHeight: 1.6
+                                  }
+                                }}
+                              />
+                            </Box>
                           </Box>
                         )}
                         {section.id === 'section-chunking' && (
@@ -1130,18 +1481,23 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           flex: 1, 
           overflow: 'hidden', 
           p: 3,
-          bgcolor: theme.palette.mode === 'dark' ? 'background.default' : '#F8F9FB'
+          bgcolor: theme.palette.mode === 'dark' 
+            ? theme.palette.background.default
+            : alpha(theme.palette.primary.main, 0.02),
         }}>
           <Paper sx={{ 
             height: '100%', 
             display: 'flex', 
             flexDirection: 'column',
-            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#FFFFFF',
+            bgcolor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.background.paper, 0.4)
+              : theme.palette.background.paper,
             borderRadius: '12px',
             overflow: 'hidden',
+            backdropFilter: 'blur(8px)',
             boxShadow: theme.palette.mode === 'dark' 
               ? 'none'
-              : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)'
+              : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
           }}>
             <Box sx={{ 
               p: 2, 
@@ -1235,37 +1591,50 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                 background: theme.palette.mode === 'dark' 
                   ? 'rgba(255, 255, 255, 0.1)' 
                   : 'rgba(0, 0, 0, 0.1)',
-                borderRadius: '4px',
+                borderRadius: '100px',
+                border: '2px solid transparent',
+                backgroundClip: 'padding-box',
                 '&:hover': {
                   background: theme.palette.mode === 'dark' 
                     ? 'rgba(255, 255, 255, 0.2)' 
-                    : 'rgba(0, 0, 0, 0.2)'
+                    : 'rgba(0, 0, 0, 0.2)',
                 }
               }
             }}>
               <Table size="small" stickyHeader sx={{
                 '& .MuiTableCell-root': {
                   borderBottom: '1px solid',
-                  borderRight: '1px solid',
-                  borderColor: theme.palette.mode === 'dark' 
-                    ? 'rgba(255, 255, 255, 0.05)'
-                    : 'rgba(0, 0, 0, 0.05)',
-                  '&:last-child': {
-                    borderRight: 'none',
-                  },
-                  padding: '12px 16px'
+                  borderColor: theme.palette.divider,
+                  padding: '12px 16px',
+                  fontSize: '0.875rem',
+                  transition: 'background-color 0.2s ease',
                 },
                 '& .MuiTableHead-root .MuiTableCell-root': {
-                  borderBottom: '2px solid',
-                  borderColor: theme.palette.mode === 'dark' 
-                    ? 'rgba(255, 255, 255, 0.1)'
-                    : 'rgba(0, 0, 0, 0.1)',
                   fontWeight: 600,
-                  fontSize: '0.875rem',
                   color: theme.palette.text.primary,
-                  bgcolor: theme.palette.mode === 'dark' 
-                    ? 'rgba(255, 255, 255, 0.03)'
-                    : '#F8F9FB'
+                  backgroundColor: theme.palette.mode === 'dark' 
+                    ? alpha(theme.palette.background.paper, 0.9)
+                    : alpha(theme.palette.background.paper, 0.9),
+                  backdropFilter: 'blur(8px)',
+                  borderBottom: '2px solid',
+                  borderColor: theme.palette.divider,
+                  fontSize: '0.8125rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                },
+                '& .MuiTableBody-root .MuiTableRow-root': {
+                  '&:hover': {
+                    backgroundColor: theme.palette.mode === 'dark'
+                      ? alpha(theme.palette.primary.main, 0.04)
+                      : alpha(theme.palette.primary.main, 0.04),
+                  },
+                },
+                '& .MuiCheckbox-root': {
+                  padding: '4px',
+                  borderRadius: '6px',
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                  },
                 },
               }}>
                 <TableHead>
@@ -1328,8 +1697,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                             setQaPairs((prev) =>
                               prev.map((row) =>
                                 row.id === qa.id ? { ...row, selected: e.target.checked } : row
-                              )
-                            )
+                              ),
+                            );
                           }}
                         />
                       </TableCell>
