@@ -1266,7 +1266,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                             <OllamaSettings 
                               onSettingsSave={handleSettingsSave} 
                               autoApply 
-                              hideTitle 
+                              hideTitle
+                              initialSettings={ollamaSettings}
                             />
                           </Box>
                         )}
@@ -1407,28 +1408,82 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         )}
                         {section.id === 'section-chunking' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
-                            <TextField
-                              label="Chunk Size"
-                              type="number"
-                              fullWidth
-                              margin="normal"
-                              value={chunkSize}
-                              onChange={(e) => setChunkSize(Number(e.target.value))}
-                            />
-                            <TextField
-                              label="Overlap"
-                              type="number"
-                              fullWidth
-                              margin="normal"
-                              value={chunkOverlap}
-                              onChange={(e) => setChunkOverlap(Number(e.target.value))}
-                            />
+                            <Box sx={{ mb: 2 }}>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                mb: 1 
+                              }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                    Chunk Size
+                                  </Typography>
+                                  <Tooltip title="The size of each text chunk in characters. Larger chunks provide more context but may be harder to process. Recommended range: 200-1000." placement="right">
+                                    <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                      <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              </Box>
+                              <TextField
+                                type="number"
+                                fullWidth
+                                value={chunkSize}
+                                onChange={(e) => setChunkSize(Number(e.target.value))}
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    fontSize: '0.875rem'
+                                  }
+                                }}
+                              />
+                            </Box>
+                            <Box sx={{ mb: 2 }}>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                mb: 1 
+                              }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                    Overlap
+                                  </Typography>
+                                  <Tooltip title="The number of characters that overlap between consecutive chunks. This helps maintain context across chunk boundaries. Recommended: 10-20% of chunk size." placement="right">
+                                    <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                      <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              </Box>
+                              <TextField
+                                type="number"
+                                fullWidth
+                                value={chunkOverlap}
+                                onChange={(e) => setChunkOverlap(Number(e.target.value))}
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    fontSize: '0.875rem'
+                                  }
+                                }}
+                              />
+                            </Box>
                             <Button
                               variant="contained"
                               fullWidth
                               color="primary"
                               startIcon={<ExtensionIcon />}
                               onClick={handleChunkDoc}
+                              sx={{
+                                textTransform: 'none',
+                                fontWeight: 500,
+                                boxShadow: 'none',
+                                '&:hover': {
+                                  boxShadow: 'none'
+                                }
+                              }}
                             >
                               Chunk Document
                             </Button>

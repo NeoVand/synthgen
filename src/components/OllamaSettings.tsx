@@ -34,6 +34,7 @@ interface OllamaSettingsProps {
   onSettingsSave: (settings: OllamaSettings) => void;
   autoApply?: boolean;
   hideTitle?: boolean;
+  initialSettings?: OllamaSettings;
 }
 
 interface OllamaModel {
@@ -43,9 +44,9 @@ interface OllamaModel {
   digest: string;
 }
 
-const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApply = false, hideTitle = false }) => {
+const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApply = false, hideTitle = false, initialSettings }) => {
   const theme = useTheme();
-  const [settings, setSettings] = useState<OllamaSettings>({
+  const [settings, setSettings] = useState<OllamaSettings>(initialSettings || {
     model: '',
     temperature: 0.7,
     topP: 0.9,
@@ -56,6 +57,13 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Add effect to update settings when initialSettings changes
+  useEffect(() => {
+    if (initialSettings) {
+      setSettings(initialSettings);
+    }
+  }, [initialSettings]);
 
   // Fetch available models from Ollama
   useEffect(() => {
@@ -130,18 +138,20 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
           justifyContent: 'space-between',
           mb: 1 
         }}>
-          <Typography sx={{ 
-            fontWeight: 500,
-            color: theme.palette.text.secondary,
-            fontSize: '0.875rem',
-          }}>
-            Model
-          </Typography>
-          <Tooltip title="Select the AI model to use for generation. Different models may have different capabilities and performance characteristics." placement="right">
-            <IconButton size="small" sx={{ opacity: 0.7 }}>
-              <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-            </IconButton>
-          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography sx={{ 
+              fontWeight: 500,
+              color: theme.palette.text.secondary,
+              fontSize: '0.875rem',
+            }}>
+              Model
+            </Typography>
+            <Tooltip title="Select the AI model to use for generation. Different models may have different capabilities and performance characteristics." placement="right">
+              <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
         <Select
           value={settings.model}
