@@ -19,6 +19,7 @@ import {
   createTheme,
   alpha,
   Tooltip,
+  Theme,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StarIcon from '@mui/icons-material/Star'
@@ -129,29 +130,68 @@ function getSectionRegistry() {
   return { register, getElement };
 }
 
-// Update the theme configuration
-const theme = createTheme({
+// Add these style constants at the top of the file
+const GLASS_EFFECT_LIGHT = {
+  backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  backdropFilter: 'blur(20px)',
+  border: 'none',
+  boxShadow: 'none',
+};
+
+const GLASS_EFFECT_DARK = {
+  backgroundColor: 'rgba(30, 41, 59, 0.6)',
+  backdropFilter: 'blur(20px)',
+  border: 'none',
+  boxShadow: 'none',
+};
+
+// Base theme configuration
+const createAppTheme = (mode: 'light' | 'dark') => createTheme({
   palette: {
-    mode: 'light',
-    primary: {
-      main: '#3B82F6',
-      light: '#60A5FA',
-      dark: '#2563EB',
-    },
-    secondary: {
-      main: '#10B981',
-      light: '#34D399',
-      dark: '#059669',
-    },
-    background: {
-      default: '#F8FAFC',
-      paper: '#FFFFFF',
-    },
-    text: {
-      primary: '#1E293B',
-      secondary: '#64748B',
-    },
-    divider: 'rgba(0, 0, 0, 0.06)',
+    mode,
+    ...(mode === 'light' 
+      ? {
+          primary: {
+            main: '#3B82F6',
+            light: '#60A5FA',
+            dark: '#2563EB',
+          },
+          secondary: {
+            main: '#10B981',
+            light: '#34D399',
+            dark: '#059669',
+          },
+          background: {
+            default: '#F0F4F8',
+            paper: '#F8FAFF',
+          },
+          text: {
+            primary: '#1E293B',
+            secondary: '#64748B',
+          },
+          divider: 'rgba(148, 163, 184, 0.08)',
+        }
+      : {
+          primary: {
+            main: '#60A5FA',
+            light: '#93C5FD',
+            dark: '#3B82F6',
+          },
+          secondary: {
+            main: '#34D399',
+            light: '#6EE7B7',
+            dark: '#10B981',
+          },
+          background: {
+            default: '#0F172A',
+            paper: '#1E293B',
+          },
+          text: {
+            primary: '#F1F5F9',
+            secondary: '#94A3B8',
+          },
+          divider: 'rgba(255, 255, 255, 0.08)',
+        }),
   },
   typography: {
     fontFamily: 'var(--font-primary)',
@@ -199,18 +239,32 @@ const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 12,
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
           textTransform: 'none',
-          borderRadius: '8px',
+          borderRadius: '10px',
           fontWeight: 600,
           boxShadow: 'none',
           '&:hover': {
             boxShadow: 'none',
+          },
+        },
+        contained: {
+          backgroundColor: mode === 'light' ? alpha('#3B82F6', 0.9) : alpha('#60A5FA', 0.9),
+          '&:hover': {
+            backgroundColor: mode === 'light' ? '#3B82F6' : '#60A5FA',
+          },
+        },
+        outlined: {
+          border: 'none',
+          backgroundColor: mode === 'light' ? alpha('#3B82F6', 0.1) : alpha('#60A5FA', 0.1),
+          '&:hover': {
+            border: 'none',
+            backgroundColor: mode === 'light' ? alpha('#3B82F6', 0.15) : alpha('#60A5FA', 0.15),
           },
         },
       },
@@ -219,45 +273,55 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
+          ...(mode === 'light' ? GLASS_EFFECT_LIGHT : GLASS_EFFECT_DARK),
         },
       },
     },
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderColor: 'rgba(0, 0, 0, 0.06)',
+          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+          borderBottom: '1px solid',
+          borderBottomColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+        },
+        head: {
+          fontWeight: 600,
+          backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.8) : alpha('#FFFFFF', 0.3),
+          backdropFilter: 'blur(20px)',
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            border: 'none',
+            backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.5) : alpha('#FFFFFF', 0.3),
+            '& fieldset': {
+              border: 'none',
+            },
+            '&:hover': {
+              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.7) : alpha('#FFFFFF', 0.4),
+              '& fieldset': {
+                border: 'none',
+              },
+            },
+            '&.Mui-focused': {
+              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.9) : alpha('#FFFFFF', 0.5),
+              '& fieldset': {
+                border: 'none',
+              },
+            },
+          },
         },
       },
     },
   },
 });
 
-// Dark mode theme
-const darkTheme = createTheme({
-  ...theme,
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#60A5FA',
-      light: '#93C5FD',
-      dark: '#3B82F6',
-    },
-    secondary: {
-      main: '#34D399',
-      light: '#6EE7B7',
-      dark: '#10B981',
-    },
-    background: {
-      default: '#0F172A',
-      paper: '#1E293B',
-    },
-    text: {
-      primary: '#F1F5F9',
-      secondary: '#94A3B8',
-    },
-    divider: 'rgba(255, 255, 255, 0.06)',
-  },
-});
+// Create the themes
+const lightTheme = createAppTheme('light');
+const darkTheme = createAppTheme('dark');
 
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // 1. Model Settings
@@ -1006,40 +1070,39 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       display: 'flex', 
       flexDirection: 'column', 
       overflow: 'hidden',
-      bgcolor: theme.palette.mode === 'dark' ? 'background.default' : '#F8F9FB'
+      bgcolor: theme.palette.mode === 'dark' ? 'background.default' : '#F0F4F8',
+      backgroundImage: theme.palette.mode === 'dark' 
+        ? 'none'
+        : 'linear-gradient(120deg, #F0F4F8 0%, #E8F0FE 100%)',
     }}>
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Sidebar */}
         <Box 
-          sx={{ 
+          sx={(theme) => ({ 
             width: isSidebarCollapsed ? 0 : `${sidebarWidth}px`,
             minWidth: isSidebarCollapsed ? 0 : undefined,
             maxWidth: isSidebarCollapsed ? 0 : undefined,
             transition: isResizing ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             position: 'relative',
-            bgcolor: theme.palette.mode === 'dark' 
-              ? alpha(theme.palette.background.paper, 0.4)
-              : theme.palette.background.paper,
-            borderRight: `1px solid ${theme.palette.divider}`,
+            ...(theme.palette.mode === 'light' ? GLASS_EFFECT_LIGHT : GLASS_EFFECT_DARK),
+            borderRight: 'none',
             display: 'flex',
             flexDirection: 'column',
             visibility: isSidebarCollapsed ? 'hidden' : 'visible',
             opacity: isSidebarCollapsed ? 0 : 1,
-            backdropFilter: 'blur(8px)',
-            boxShadow: theme.palette.mode === 'dark' 
-              ? 'none'
-              : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-          }}
+          })}
         >
           {/* Sidebar Header */}
-          <Box sx={{ 
+          <Box sx={(theme) => ({ 
             p: 2, 
             display: 'flex', 
             alignItems: 'center',
-            borderBottom: 1,
-            borderColor: 'divider',
-            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#FFFFFF',
-          }}>
+            borderBottom: 'none',
+            bgcolor: theme.palette.mode === 'dark'
+              ? alpha(theme.palette.background.paper, 0.4)
+              : alpha('#FFFFFF', 0.5),
+            backdropFilter: 'blur(20px)',
+          })}>
             <ScienceIcon sx={{ 
               mr: 1.5, 
               color: theme.palette.primary.main,
@@ -1095,12 +1158,14 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   }}
                 >
                   <Paper 
-                    elevation={1}
+                    elevation={0}
                     sx={{ 
-                      bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#FFFFFF',
+                      bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
                       transition: 'all 0.2s ease',
                       borderRadius: '8px',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
+                      border: 'none',
+                      boxShadow: 'none'
                     }}
                   >
                     <Box 
@@ -1143,9 +1208,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         },
                         '&:hover': {
                           bgcolor: theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.03)' 
-                            : 'rgba(0, 0, 0, 0.02)',
-                          boxShadow: theme.shadows[1]
+                            ? 'rgba(255, 255, 255, 0.04)' 
+                            : 'rgba(0, 0, 0, 0.03)',
+                          boxShadow: 'none'
                         }
                       }} 
                       onClick={() => toggleSection(section.id)}
@@ -1212,7 +1277,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         pt: 1,
                         bgcolor: theme.palette.mode === 'dark' 
                           ? 'rgba(255, 255, 255, 0.02)' 
-                          : 'rgba(0, 0, 0, 0.01)'
+                          : 'rgba(0, 0, 0, 0.01)',
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.04)' 
+                            : 'rgba(0, 0, 0, 0.03)',
+                          boxShadow: 'none'
+                        }
                       }}>
                         {/* Render section content based on section.id */}
                         {section.id === 'section-upload' && (
@@ -1523,30 +1594,25 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           flex: 1, 
           overflow: 'hidden', 
           p: 3,
-          bgcolor: theme.palette.mode === 'dark' 
-            ? theme.palette.background.default
-            : alpha(theme.palette.primary.main, 0.02),
+          bgcolor: 'transparent',
         }}>
-          <Paper sx={{ 
+          <Paper sx={(theme) => ({ 
             height: '100%', 
             display: 'flex', 
             flexDirection: 'column',
-            bgcolor: theme.palette.mode === 'dark' 
-              ? alpha(theme.palette.background.paper, 0.4)
-              : theme.palette.background.paper,
-            borderRadius: '12px',
+            ...(theme.palette.mode === 'light' ? GLASS_EFFECT_LIGHT : GLASS_EFFECT_DARK),
+            borderRadius: '16px',
             overflow: 'hidden',
-            backdropFilter: 'blur(8px)',
-            boxShadow: theme.palette.mode === 'dark' 
-              ? 'none'
-              : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-          }}>
-            <Box sx={{ 
+          })}>
+            <Box sx={(theme) => ({ 
               p: 2, 
               borderBottom: 1, 
               borderColor: 'divider',
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#FFFFFF'
-            }}>
+              bgcolor: theme.palette.mode === 'dark'
+                ? alpha(theme.palette.background.paper, 0.4)
+                : alpha('#FFFFFF', 0.5),
+              backdropFilter: 'blur(20px)',
+            })}>
               <Box sx={{ display: 'flex', gap: 1.5 }}>
                 <IconButton
                   onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -1736,11 +1802,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       sx={{
                         bgcolor: theme.palette.mode === 'dark'
                           ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
-                          : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.01)' : 'transparent',
+                          : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
                         '&:hover': {
                           bgcolor: theme.palette.mode === 'dark'
                             ? 'rgba(255, 255, 255, 0.05)'
-                            : 'rgba(0, 0, 0, 0.03)',
+                            : 'rgba(0, 0, 0, 0.05)',
                         },
                         borderBottom: '1px solid',
                         borderColor: theme.palette.mode === 'dark' 
