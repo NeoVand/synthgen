@@ -11,7 +11,6 @@ import {
   FormControlLabel,
   Box,
   Button,
-  Paper,
   CircularProgress
 } from '@mui/material';
 

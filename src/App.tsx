@@ -588,11 +588,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }));
   }, []);
 
-  // Helper to calculate TextField rows based on content
-  const calculateRows = (content: string, isExpanded: boolean, isGenerating: boolean): number => {
-    const baseRows = 2;
-    return isExpanded ? Math.max(content.split('\n').length, baseRows) : baseRows;
-  };
 
   // Add this helper for auto-scrolling
   const scrollToBottom = useCallback((element: HTMLElement | null) => {
