@@ -22,6 +22,7 @@ import {
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StarIcon from '@mui/icons-material/Star'
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import SaveAltIcon from '@mui/icons-material/SaveAlt'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
@@ -1056,20 +1057,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               Q&A Generator
             </Typography>
             <IconButton 
-              onClick={handleExportCSV} 
-              size="small"
-              disabled={qaPairs.length === 0}
-              sx={{ 
-                mr: 1,
-                color: theme.palette.primary.main,
-                '&:disabled': {
-                  color: theme.palette.action.disabled
-                }
-              }}
-            >
-              <SaveAltIcon />
-            </IconButton>
-            <IconButton 
               onClick={onThemeChange} 
               size="small"
               sx={{ 
@@ -1103,42 +1090,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               {currentSections.map((section, index) => (
                 <Box
                   key={section.id}
-                  ref={(element: HTMLDivElement | null) => {
-                    if (element) {
-                      const cleanup = combine(
-                        registry.register({ sectionId: section.id, element }),
-                        draggable({
-                          element,
-                          getInitialData: () => ({ type: 'section', id: section.id, index }),
-                        }),
-                        dropTargetForElements({
-                          element,
-                          canDrop: ({ source }) => source.data.type === 'section',
-                          getData: ({ input }) => attachClosestEdge(
-                            { type: 'section', id: section.id, index },
-                            {
-                              element,
-                              input,
-                              allowedEdges: ['top', 'bottom'],
-                            }
-                          ),
-                        })
-                      );
-                      return cleanup;
-                    }
-                  }}
                   sx={{ 
                     mb: 2,
-                    cursor: 'grab',
-                    '&:active': {
-                      cursor: 'grabbing',
-                    },
-                    '&:hover': {
-                      '& .MuiPaper-root': {
-                        transform: 'translateY(-1px)',
-                        boxShadow: theme.shadows[2]
-                      }
-                    }
                   }}
                 >
                   <Paper 
@@ -1151,20 +1104,48 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     }}
                   >
                     <Box 
+                      ref={(element: HTMLDivElement | null) => {
+                        if (element) {
+                          const cleanup = combine(
+                            registry.register({ sectionId: section.id, element }),
+                            draggable({
+                              element,
+                              getInitialData: () => ({ type: 'section', id: section.id, index }),
+                            }),
+                            dropTargetForElements({
+                              element,
+                              canDrop: ({ source }) => source.data.type === 'section',
+                              getData: ({ input }) => attachClosestEdge(
+                                { type: 'section', id: section.id, index },
+                                {
+                                  element,
+                                  input,
+                                  allowedEdges: ['top', 'bottom'],
+                                }
+                              ),
+                            })
+                          );
+                          return cleanup;
+                        }
+                      }}
                       sx={{ 
-                        py: 1.5,
-                        px: 2,
+                        py: 0.75,
+                        px: 1.5,
                         display: 'flex', 
                         alignItems: 'center',
-                        cursor: 'pointer',
+                        cursor: 'grab',
                         position: 'relative',
                         color: theme.palette.primary.main,
-                        minHeight: 48,
-                        transition: 'background-color 0.2s ease',
+                        minHeight: 32,
+                        transition: 'all 0.2s ease',
+                        '&:active': {
+                          cursor: 'grabbing',
+                        },
                         '&:hover': {
                           bgcolor: theme.palette.mode === 'dark' 
                             ? 'rgba(255, 255, 255, 0.03)' 
-                            : 'rgba(0, 0, 0, 0.02)'
+                            : 'rgba(0, 0, 0, 0.02)',
+                          boxShadow: theme.shadows[1]
                         }
                       }} 
                       onClick={() => toggleSection(section.id)}
@@ -1173,10 +1154,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         <Box sx={{ 
                           display: 'flex',
                           alignItems: 'center',
-                          mr: 2,
+                          mr: 1.5,
                           color: 'inherit',
                           '& svg': {
-                            fontSize: '1.25rem',
+                            fontSize: '1.1rem',
                           }
                         }}>
                           {section.icon}
@@ -1186,7 +1167,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         flexGrow: 1, 
                         fontWeight: 500,
                         color: theme.palette.mode === 'dark' ? '#fff' : 'text.primary',
-                        fontSize: '0.9rem',
+                        fontSize: '0.85rem',
                         letterSpacing: '0.01em'
                       }}>
                         {section.title}
@@ -1291,6 +1272,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 onChange={(e) => setSummaryPrompt(e.target.value)}
                                 minRows={2}
                                 maxRows={6}
+                                className="no-drag"
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
                                     borderRadius: '8px',
@@ -1306,7 +1288,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                               onClick={handleSummarize}
                               fullWidth
                               sx={{ mt: 1, mb: 2 }}
-                              startIcon={isGenerating && generationType === 'summary' ? <StopIcon /> : <StarIcon />}
+                              startIcon={isGenerating && generationType === 'summary' ? <StopIcon /> : <AutoAwesomeIcon />}
                             >
                               {isGenerating && generationType === 'summary' ? "Stop" : "Generate Summary"}
                             </Button>
@@ -1329,6 +1311,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 placeholder="(Optional) Provide or edit a summary here..."
                                 minRows={6}
                                 maxRows={12}
+                                className="no-drag"
                                 ref={(el) => {
                                   if (el) {
                                     const textarea = el.querySelector('textarea');
@@ -1368,6 +1351,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 onChange={(e) => setPromptQuestion(e.target.value)}
                                 minRows={3}
                                 maxRows={8}
+                                className="no-drag"
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
                                     borderRadius: '8px',
@@ -1395,6 +1379,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 onChange={(e) => setPromptAnswer(e.target.value)}
                                 minRows={3}
                                 maxRows={8}
+                                className="no-drag"
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
                                     borderRadius: '8px',
@@ -1431,6 +1416,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 fullWidth
                                 value={chunkSize}
                                 onChange={(e) => setChunkSize(Number(e.target.value))}
+                                className="no-drag"
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
                                     borderRadius: '8px',
@@ -1462,6 +1448,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 fullWidth
                                 value={chunkOverlap}
                                 onChange={(e) => setChunkOverlap(Number(e.target.value))}
+                                className="no-drag"
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
                                     borderRadius: '8px',
@@ -1575,24 +1562,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   {isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                 </IconButton>
                 <Button
-                  variant="outlined"
-                  color="error"
-                  size="small"
-                  startIcon={<DeleteIcon />}
-                  onClick={handleDeleteSelected}
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 500
-                  }}
-                >
-                  Delete Selected
-                </Button>
-                <Button
                   variant="contained"
                   color={isGenerating && generationType === 'qa' ? "error" : "primary"}
                   size="small"
-                  startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <StarIcon />}
+                  startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
                   onClick={handleGenerate}
+                  disabled={!rawText || qaPairs.length === 0}
                   sx={{
                     textTransform: 'none',
                     fontWeight: 500,
@@ -1603,6 +1578,34 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   }}
                 >
                   {isGenerating && generationType === 'qa' ? "Stop Generation" : "Generate Q&A"}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteSelected}
+                  disabled={qaPairs.length === 0}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 500
+                  }}
+                >
+                  Delete Selected
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  startIcon={<SaveAltIcon />}
+                  onClick={handleExportCSV}
+                  disabled={qaPairs.length === 0}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 500
+                  }}
+                >
+                  Export CSV
                 </Button>
               </Box>
             </Box>
