@@ -31,26 +31,45 @@ function ThemeWrapper() {
         palette: {
           mode: mode as 'light' | 'dark',
           primary: {
-            main: mode === 'dark' ? '#6b70c9' : '#5a64d9',
-            dark: mode === 'dark' ? '#565ba3' : '#4850ad',
+            light: mode === 'dark' ? '#8388E5' : '#A5ACFF',
+            main: mode === 'dark' ? '#6b70c9' : '#8891FF',
+            dark: mode === 'dark' ? '#565ba3' : '#6B74E3',
+            contrastText: '#fff',
+          },
+          secondary: {
+            light: mode === 'dark' ? '#B996E0' : '#D4B6FF',
+            main: mode === 'dark' ? '#9C6BC9' : '#B996E0',
+            dark: mode === 'dark' ? '#7E55A3' : '#9C6BC9',
+            contrastText: '#fff',
           },
           error: {
-            main: mode === 'dark' ? '#b85f5f' : '#d46c6c',
+            light: mode === 'dark' ? '#D47F7F' : '#FFB1B1',
+            main: mode === 'dark' ? '#b85f5f' : '#FF9494',
+            dark: mode === 'dark' ? '#934B4B' : '#D67373',
           },
           success: {
-            main: mode === 'dark' ? '#5f9a7a' : '#66a583',
+            light: mode === 'dark' ? '#7FB99A' : '#B1E3C5',
+            main: mode === 'dark' ? '#5f9a7a' : '#91CBA8',
+            dark: mode === 'dark' ? '#4B7B61' : '#66A583',
           },
           background: {
-            default: mode === 'dark' ? '#0a0a0a' : '#f8f9fa',
-            paper: mode === 'dark' ? '#141414' : '#ffffff',
+            default: mode === 'dark' ? '#0a0a0a' : '#F8FAFC',
+            paper: mode === 'dark' ? '#141414' : '#FFFFFF',
           },
           text: {
-            primary: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.87)',
-            secondary: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+            primary: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.85)',
+            secondary: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.55)',
+            disabled: mode === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(15, 23, 42, 0.35)',
           },
           action: {
-            hover: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+            active: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.6)',
+            hover: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.03)',
+            selected: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.06)',
+            disabled: mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(15, 23, 42, 0.24)',
+            disabledBackground: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)',
+            focus: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)',
           },
+          divider: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.06)',
         },
         components: {
           MuiAppBar: {
@@ -60,8 +79,8 @@ function ThemeWrapper() {
             styleOverrides: {
               root: {
                 backgroundColor: 'transparent',
-                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.87)',
-                borderBottom: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.95)',
+                borderBottom: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)'}`,
                 height: 48,
               },
             },
@@ -88,28 +107,40 @@ function ThemeWrapper() {
                 },
               },
               contained: {
-                backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.07)',
+                backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.03)',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
+                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.06)',
                   boxShadow: 'none',
                 },
               },
               containedPrimary: {
-                backgroundColor: mode === 'dark' ? '#4a4f8c' : '#5a64d9',
+                backgroundColor: mode === 'dark' ? '#4a4f8c' : '#8891FF',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#565ba3' : '#4850ad',
+                  backgroundColor: mode === 'dark' ? '#565ba3' : '#6B74E3',
                 },
               },
               containedError: {
-                backgroundColor: mode === 'dark' ? '#8c4646' : '#c25555',
+                backgroundColor: mode === 'dark' ? '#8c4646' : '#FF9494',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#a35151' : '#ad4848',
+                  backgroundColor: mode === 'dark' ? '#a35151' : '#D67373',
                 },
               },
               containedSuccess: {
-                backgroundColor: mode === 'dark' ? '#4a725c' : '#5a8c6e',
+                backgroundColor: mode === 'dark' ? '#4a725c' : '#91CBA8',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#558269' : '#66a583',
+                  backgroundColor: mode === 'dark' ? '#558269' : '#66A583',
+                },
+              },
+              outlined: {
+                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.12)',
+                '&:hover': {
+                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.03)',
+                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.2)',
+                },
+              },
+              text: {
+                '&:hover': {
+                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.03)',
                 },
               },
             },
@@ -148,7 +179,23 @@ function ThemeWrapper() {
             styleOverrides: {
               root: {
                 backgroundImage: 'none',
-                border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)'}`,
+              },
+            },
+          },
+          MuiIconButton: {
+            styleOverrides: {
+              root: {
+                '&:hover': {
+                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)',
+                },
+              },
+            },
+          },
+          MuiCheckbox: {
+            styleOverrides: {
+              root: {
+                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(15, 23, 42, 0.4)',
               },
             },
           },

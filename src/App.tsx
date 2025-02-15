@@ -3,7 +3,6 @@ import {
   Typography,
   Paper,
   Button,
-  CircularProgress,
   Checkbox,
   Table,
   TableBody,
@@ -16,13 +15,10 @@ import {
   IconButton,
   Collapse,
   useTheme,
-  createTheme,
   alpha,
   Tooltip,
-  Theme,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
-import StarIcon from '@mui/icons-material/Star'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import SaveAltIcon from '@mui/icons-material/SaveAlt'
 import LightModeIcon from '@mui/icons-material/LightMode'
@@ -152,206 +148,7 @@ const GLASS_EFFECT_DARK = {
   boxShadow: 'none',
 };
 
-// Base theme configuration
-const createAppTheme = (mode: 'light' | 'dark') => createTheme({
-  palette: {
-    mode,
-    ...(mode === 'light' 
-      ? {
-          primary: {
-            main: '#2563EB', // Brighter blue
-            light: '#60A5FA',
-            dark: '#1D4ED8',
-          },
-          secondary: {
-            main: '#22C55E',
-            light: '#4ADE80',
-            dark: '#16A34A',
-          },
-          background: {
-            default: '#F8FAFC',
-            paper: '#FFFFFF',
-          },
-          text: {
-            primary: '#1E293B',
-            secondary: '#64748B',
-          },
-          divider: 'rgba(148, 163, 184, 0.08)',
-          action: {
-            hover: 'rgba(37, 99, 235, 0.04)',
-            selected: 'rgba(37, 99, 235, 0.08)',
-            disabled: 'rgba(148, 163, 184, 0.3)',
-            disabledBackground: 'rgba(148, 163, 184, 0.12)',
-          },
-        }
-      : {
-          // Keep dark mode as is
-          primary: {
-            main: '#60A5FA',
-            light: '#93C5FD',
-            dark: '#3B82F6',
-          },
-          secondary: {
-            main: '#34D399',
-            light: '#6EE7B7',
-            dark: '#10B981',
-          },
-          background: {
-            default: '#0F172A',
-            paper: '#1E293B',
-          },
-          text: {
-            primary: '#F1F5F9',
-            secondary: '#94A3B8',
-          },
-          divider: 'rgba(255, 255, 255, 0.08)',
-        }),
-  },
-  typography: {
-    fontFamily: 'var(--font-primary)',
-    h1: {
-      fontWeight: 700,
-      letterSpacing: '-0.025em',
-    },
-    h2: {
-      fontWeight: 700,
-      letterSpacing: '-0.025em',
-    },
-    h3: {
-      fontWeight: 600,
-      letterSpacing: '-0.025em',
-    },
-    h4: {
-      fontWeight: 600,
-      letterSpacing: '-0.025em',
-    },
-    h5: {
-      fontWeight: 600,
-      letterSpacing: '-0.025em',
-    },
-    h6: {
-      fontWeight: 600,
-      letterSpacing: '-0.025em',
-    },
-    subtitle1: {
-      fontWeight: 500,
-      letterSpacing: '-0.015em',
-    },
-    subtitle2: {
-      fontWeight: 500,
-      letterSpacing: '-0.015em',
-    },
-    body1: {
-      letterSpacing: '-0.01em',
-    },
-    body2: {
-      letterSpacing: '-0.01em',
-    },
-    button: {
-      fontWeight: 600,
-      letterSpacing: '-0.015em',
-    },
-  },
-  shape: {
-    borderRadius: 12,
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          borderRadius: '10px',
-          fontWeight: 600,
-          boxShadow: 'none',
-          '&:hover': {
-            boxShadow: 'none',
-          },
-        },
-        contained: ({ theme }) => ({
-          backgroundColor: mode === 'light' 
-            ? alpha(theme.palette.primary.main, 0.9)
-            : alpha('#60A5FA', 0.9),
-          color: mode === 'light' ? '#FFFFFF' : undefined,
-          '&:hover': {
-            backgroundColor: mode === 'light' 
-              ? theme.palette.primary.main
-              : '#60A5FA',
-          },
-          // Add a subtle border in light mode
-          border: mode === 'light' ? '1px solid rgba(37, 99, 235, 0.1)' : 'none',
-        }),
-        outlined: ({ theme }) => ({
-          border: 'none',
-          color: mode === 'light' ? theme.palette.primary.main : undefined,
-          backgroundColor: mode === 'light' 
-            ? alpha(theme.palette.primary.main, 0.08)
-            : alpha('#60A5FA', 0.1),
-          '&:hover': {
-            border: 'none',
-            backgroundColor: mode === 'light' 
-              ? alpha(theme.palette.primary.main, 0.12)
-              : alpha('#60A5FA', 0.15),
-          },
-        }),
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-          ...(mode === 'light' ? {
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(148, 163, 184, 0.08)',
-          } : GLASS_EFFECT_DARK),
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: {
-          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(148, 163, 184, 0.08)',
-          borderBottom: '1px solid',
-          borderBottomColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(148, 163, 184, 0.08)',
-        },
-        head: {
-          fontWeight: 600,
-          backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.8) : alpha('#FFFFFF', 0.8),
-          backdropFilter: 'blur(20px)',
-        },
-      },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiOutlinedInput-root': {
-            border: 'none',
-            backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.5) : alpha('#F8FAFC', 0.5),
-            '& fieldset': {
-              border: mode === 'light' ? '1px solid rgba(148, 163, 184, 0.2)' : 'none',
-            },
-            '&:hover': {
-              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.7) : alpha('#F1F5F9', 0.7),
-              '& fieldset': {
-                border: mode === 'light' ? '1px solid rgba(37, 99, 235, 0.2)' : 'none',
-              },
-            },
-            '&.Mui-focused': {
-              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.9) : alpha('#F1F5F9', 0.9),
-              '& fieldset': {
-                border: mode === 'light' ? '1px solid rgba(37, 99, 235, 0.3)' : 'none',
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-});
 
-// Create the themes
-const lightTheme = createAppTheme('light');
-const darkTheme = createAppTheme('dark');
 
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // 1. Model Settings
@@ -1893,86 +1690,158 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             overflow: 'hidden',
           })}>
             <Box sx={(theme) => ({ 
-              p: 2, 
+              p: 1.5,
               borderBottom: 1, 
-              borderColor: 'divider',
+              borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)',
               bgcolor: theme.palette.mode === 'dark'
                 ? alpha(theme.palette.background.paper, 0.4)
                 : alpha('#FFFFFF', 0.5),
               backdropFilter: 'blur(20px)',
             })}>
-              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                <IconButton
-                  onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                  size="small"
-                  sx={{ 
-                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
-                    '&:hover': {
-                      bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
-                    },
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-                </IconButton>
-                <Button
-                  variant="contained"
-                  color={isGenerating && generationType === 'qa' ? "error" : "primary"}
-                  size="small"
-                  startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
-                  onClick={viewMode === 'flashcard' ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerate}
-                  disabled={!rawText || qaPairs.length === 0}
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 500,
-                    boxShadow: 'none',
-                    '&:hover': {
-                      boxShadow: 'none'
-                    }
-                  }}
-                >
-                  {isGenerating && generationType === 'qa' 
-                    ? "Stop Generation" 
-                    : viewMode === 'flashcard' 
-                      ? "Generate Card" 
-                      : "Generate Q&A"}
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  size="small"
-                  startIcon={<DeleteIcon />}
-                  onClick={handleDeleteSelected}
-                  disabled={qaPairs.length === 0}
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 500
-                  }}
-                >
-                  Delete
-                </Button>
-                {viewMode === 'table' ? (
-                  <Button
-                    variant="outlined"
-                    color="primary"
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: 40
+              }}>
+                {/* Left section */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <IconButton
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                     size="small"
-                    startIcon={<SaveAltIcon />}
-                    onClick={handleExportCSV}
-                    disabled={qaPairs.length === 0}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 500
+                    sx={{ 
+                      color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.54)',
+                      '&:hover': {
+                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                      },
                     }}
                   >
-                    Export CSV
-                  </Button>
-                ) : (
-                  <CardNavigation 
-                    currentIndex={currentIndex}
-                    totalCards={qaPairs.length}
-                    onCardChange={handleCardChange}
-                  />
-                )}
+                    {isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+                  </IconButton>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                    <Button
+                      variant="contained"
+                      color={isGenerating && generationType === 'qa' ? "error" : "primary"}
+                      size="small"
+                      disableElevation
+                      startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
+                      onClick={viewMode === 'flashcard' ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerate}
+                      disabled={!rawText || qaPairs.length === 0}
+                      sx={{
+                        minWidth: '120px',
+                        height: 32,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        borderRadius: '6px',
+                        px: 2,
+                        bgcolor: isGenerating && generationType === 'qa' 
+                          ? theme.palette.error.main 
+                          : theme.palette.primary.main,
+                        '&:hover': {
+                          bgcolor: isGenerating && generationType === 'qa'
+                            ? theme.palette.error.dark
+                            : theme.palette.primary.dark,
+                        }
+                      }}
+                    >
+                      {isGenerating && generationType === 'qa' 
+                        ? "Stop" 
+                        : viewMode === 'flashcard' 
+                          ? "Generate Card" 
+                          : "Generate Q&A"}
+                    </Button>
+
+                    <Button
+                      color="error"
+                      size="small"
+                      onClick={handleDeleteSelected}
+                      disabled={qaPairs.length === 0}
+                      startIcon={<DeleteIcon fontSize="small" />}
+                      sx={{
+                        ml: 1,
+                        height: 32,
+                        minWidth: 'auto',
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        color: theme.palette.error.main,
+                        px: {
+                          xs: 1, // Icon only on very small screens
+                          sm: 2  // Text + icon on larger screens
+                        },
+                        '& .MuiButton-startIcon': {
+                          mr: {
+                            xs: 0,  // No margin when text is hidden
+                            sm: 1   // Normal margin when text is shown
+                          }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.error.main, 0.08),
+                        },
+                        '&.Mui-disabled': {
+                          color: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.3)' 
+                            : 'rgba(0, 0, 0, 0.26)'
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                        Delete
+                      </Box>
+                    </Button>
+                  </Box>
+                </Box>
+
+                {/* Right section */}
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  {viewMode === 'table' ? (
+                    <Button
+                      color="primary"
+                      size="small"
+                      onClick={handleExportCSV}
+                      disabled={qaPairs.length === 0}
+                      startIcon={<SaveAltIcon fontSize="small" />}
+                      sx={{
+                        height: 32,
+                        minWidth: 'auto',
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        color: theme.palette.primary.main,
+                        px: {
+                          xs: 1, // Icon only on very small screens
+                          sm: 2  // Text + icon on larger screens
+                        },
+                        '& .MuiButton-startIcon': {
+                          mr: {
+                            xs: 0,  // No margin when text is hidden
+                            sm: 1   // Normal margin when text is shown
+                          }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.primary.main, 0.08),
+                        },
+                        '&.Mui-disabled': {
+                          color: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.3)' 
+                            : 'rgba(0, 0, 0, 0.26)'
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                        Export
+                      </Box>
+                    </Button>
+                  ) : (
+                    <CardNavigation 
+                      currentIndex={currentIndex}
+                      totalCards={qaPairs.length}
+                      onCardChange={handleCardChange}
+                    />
+                  )}
+                </Box>
               </Box>
             </Box>
 
