@@ -34,7 +34,7 @@ SynthGen is a user-friendly desktop application that helps you generate high-qua
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/synthgen.git
+git clone https://github.com/NeoVand/synthgen.git
 cd synthgen
 
 # Install dependencies
