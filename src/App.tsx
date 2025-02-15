@@ -10,6 +10,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   TextField,
   Box,
   IconButton,
@@ -161,6 +162,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     seed: 42,
     numCtx: 2048,
   })
+
+  // Pagination state
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
+  const [availableRowsPerPage] = useState<number[]>([5, 10, 25, 50]);
 
   // Document text + file name
   const [rawText, setRawText] = useState<string>('')
@@ -2043,145 +2049,147 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {qaPairs.map((qa, rowIndex) => (
-                        <TableRow 
-                          key={qa.id}
-                          sx={{
-                            bgcolor: theme.palette.mode === 'dark'
-                              ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
-                              : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
-                            '&:hover': {
+                      {qaPairs
+                        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                        .map((qa, rowIndex) => (
+                          <TableRow 
+                            key={qa.id}
+                            sx={{
                               bgcolor: theme.palette.mode === 'dark'
+                                ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
+                                : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
+                              '&:hover': {
+                                bgcolor: theme.palette.mode === 'dark'
+                                  ? 'rgba(255, 255, 255, 0.05)'
+                                  : 'rgba(0, 0, 0, 0.05)',
+                              },
+                              borderBottom: '1px solid',
+                              borderColor: theme.palette.mode === 'dark' 
                                 ? 'rgba(255, 255, 255, 0.05)'
                                 : 'rgba(0, 0, 0, 0.05)',
-                            },
-                            borderBottom: '1px solid',
-                            borderColor: theme.palette.mode === 'dark' 
-                              ? 'rgba(255, 255, 255, 0.05)'
-                              : 'rgba(0, 0, 0, 0.05)',
-                          }}
-                        >
-                          <TableCell padding="checkbox">
-                            <Checkbox
-                              checked={!!qa.selected}
-                              onChange={(e) => {
-                                setQaPairs((prev) =>
-                                  prev.map((row) =>
-                                    row.id === qa.id ? { ...row, selected: e.target.checked } : row
-                                  ),
-                                );
-                              }}
-                            />
-                          </TableCell>
-                          {['context', 'question', 'answer'].map((columnType) => {
-                            const isGenerating = isCellGenerating(qa, columnType);
-                            const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGenerating;
-                            const content = qa[columnType as keyof typeof qa] as string;
-                            
-                            return (
-                              <TableCell 
-                                key={columnType}
-                                onClick={() => toggleCellExpansion(qa.id, columnType)}
-                                sx={{ 
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s ease',
-                                  padding: '4px 8px',
-                                  minWidth: '200px',
-                                  maxWidth: '400px',
-                                  position: 'relative',
-                                  '&:hover': {
-                                    backgroundColor: theme.palette.mode === 'dark' 
-                                      ? 'rgba(255, 255, 255, 0.04)'
-                                      : 'rgba(0, 0, 0, 0.02)',
-                                  },
+                            }}
+                          >
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={!!qa.selected}
+                                onChange={(e) => {
+                                  setQaPairs((prev) =>
+                                    prev.map((row) =>
+                                      row.id === qa.id ? { ...row, selected: e.target.checked } : row
+                                    ),
+                                  );
                                 }}
-                              >
-                                <Box sx={{ 
-                                  position: 'relative',
-                                  maxHeight: isExpanded ? 'none' : '4.5em',
-                                  overflow: isExpanded ? 'visible' : 'auto',
-                                  transition: 'all 0.2s ease',
-                                  '&::-webkit-scrollbar': {
-                                    width: '4px',
-                                  },
-                                  '&::-webkit-scrollbar-thumb': {
-                                    backgroundColor: 'rgba(0,0,0,0.1)',
-                                    borderRadius: '2px',
-                                  },
-                                  // Force height reset when not expanded
-                                  height: isExpanded ? 'auto' : '4.5em',
-                                }}>
-                                  <TextField
-                                    multiline
-                                    fullWidth
-                                    variant="standard"
-                                    value={content}
-                                    onChange={(e) => {
-                                      e.stopPropagation();
-                                      setQaPairs((prev) =>
-                                        prev.map((row) =>
-                                          row.id === qa.id ? { ...row, [columnType]: e.target.value } : row
+                              />
+                            </TableCell>
+                            {['context', 'question', 'answer'].map((columnType) => {
+                              const isGenerating = isCellGenerating(qa, columnType);
+                              const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGenerating;
+                              const content = qa[columnType as keyof typeof qa] as string;
+                              
+                              return (
+                                <TableCell 
+                                  key={columnType}
+                                  onClick={() => toggleCellExpansion(qa.id, columnType)}
+                                  sx={{ 
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    padding: '4px 8px',
+                                    minWidth: '200px',
+                                    maxWidth: '400px',
+                                    position: 'relative',
+                                    '&:hover': {
+                                      backgroundColor: theme.palette.mode === 'dark' 
+                                        ? 'rgba(255, 255, 255, 0.04)'
+                                        : 'rgba(0, 0, 0, 0.02)',
+                                    },
+                                  }}
+                                >
+                                  <Box sx={{ 
+                                    position: 'relative',
+                                    maxHeight: isExpanded ? 'none' : '4.5em',
+                                    overflow: isExpanded ? 'visible' : 'auto',
+                                    transition: 'all 0.2s ease',
+                                    '&::-webkit-scrollbar': {
+                                      width: '4px',
+                                    },
+                                    '&::-webkit-scrollbar-thumb': {
+                                      backgroundColor: 'rgba(0,0,0,0.1)',
+                                      borderRadius: '2px',
+                                    },
+                                    // Force height reset when not expanded
+                                    height: isExpanded ? 'auto' : '4.5em',
+                                  }}>
+                                    <TextField
+                                      multiline
+                                      fullWidth
+                                      variant="standard"
+                                      value={content}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setQaPairs((prev) =>
+                                          prev.map((row) =>
+                                            row.id === qa.id ? { ...row, [columnType]: e.target.value } : row
+                                          )
                                         )
-                                      )
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    InputProps={{
-                                      disableUnderline: true,
-                                      sx: {
-                                        alignItems: 'flex-start',
-                                        padding: 0,
-                                        fontSize: '0.875rem',
-                                        lineHeight: 1.5,
-                                        minHeight: isExpanded ? 'auto' : '4.5em',
-                                        '& textarea': {
-                                          padding: 0,
-                                        }
-                                      }
-                                    }}
-                                    sx={{
-                                      width: '100%',
-                                      '& .MuiInputBase-root': {
-                                        padding: 0,
-                                      },
-                                    }}
-                                  />
-                                  {!isExpanded && content.split('\n').length > 3 && (
-                                    <Box
-                                      sx={{
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        left: 0,
-                                        right: 0,
-                                        height: '2em',
-                                        background: `linear-gradient(transparent, ${
-                                          theme.palette.mode === 'dark' 
-                                            ? 'rgba(0, 0, 0, 0.8)' 
-                                            : 'rgb(248, 249, 251)'
-                                        } 80%)`,
-                                        pointerEvents: 'none',
-                                        display: 'flex',
-                                        alignItems: 'flex-end',
-                                        justifyContent: 'center',
-                                        pb: 0.5,
                                       }}
-                                    >
-                                      <Typography
-                                        variant="caption"
+                                      onClick={(e) => e.stopPropagation()}
+                                      InputProps={{
+                                        disableUnderline: true,
+                                        sx: {
+                                          alignItems: 'flex-start',
+                                          padding: 0,
+                                          fontSize: '0.875rem',
+                                          lineHeight: 1.5,
+                                          minHeight: isExpanded ? 'auto' : '4.5em',
+                                          '& textarea': {
+                                            padding: 0,
+                                          }
+                                        }
+                                      }}
+                                      sx={{
+                                        width: '100%',
+                                        '& .MuiInputBase-root': {
+                                          padding: 0,
+                                        },
+                                      }}
+                                    />
+                                    {!isExpanded && content.split('\n').length > 3 && (
+                                      <Box
                                         sx={{
-                                          color: theme.palette.text.disabled,
-                                          fontSize: '0.75rem',
+                                          position: 'absolute',
+                                          bottom: 0,
+                                          left: 0,
+                                          right: 0,
+                                          height: '2em',
+                                          background: `linear-gradient(transparent, ${
+                                            theme.palette.mode === 'dark' 
+                                              ? 'rgba(0, 0, 0, 0.8)' 
+                                              : 'rgb(248, 249, 251)'
+                                          } 80%)`,
+                                          pointerEvents: 'none',
+                                          display: 'flex',
+                                          alignItems: 'flex-end',
+                                          justifyContent: 'center',
+                                          pb: 0.5,
                                         }}
                                       >
-                                        •••
-                                      </Typography>
-                                    </Box>
-                                  )}
-                                </Box>
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      ))}
+                                        <Typography
+                                          variant="caption"
+                                          sx={{
+                                            color: theme.palette.text.disabled,
+                                            fontSize: '0.75rem',
+                                          }}
+                                        >
+                                          •••
+                                        </Typography>
+                                      </Box>
+                                    )}
+                                  </Box>
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        ))}
                       {qaPairs.length === 0 && !isGenerating && (
                         <TableRow>
                           <TableCell colSpan={4}>
@@ -2193,6 +2201,33 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       )}
                     </TableBody>
                   </Table>
+                  {/* Add pagination controls */}
+                  <TablePagination
+                    component="div"
+                    count={qaPairs.length}
+                    page={page}
+                    onPageChange={(event, newPage) => {
+                      setPage(newPage);
+                      // Reset expanded cells when changing pages
+                      setExpandedCells({});
+                    }}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(event) => {
+                      setRowsPerPage(parseInt(event.target.value, 10));
+                      setPage(0);
+                      // Reset expanded cells when changing rows per page
+                      setExpandedCells({});
+                    }}
+                    rowsPerPageOptions={availableRowsPerPage}
+                    sx={{
+                      borderTop: 1,
+                      borderColor: theme.palette.divider,
+                      bgcolor: theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.background.paper, 0.6)
+                        : alpha(theme.palette.background.paper, 0.6),
+                      backdropFilter: 'blur(8px)',
+                    }}
+                  />
                 </TableContainer>
               ) : (
                 <FlashcardView
