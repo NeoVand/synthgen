@@ -7,6 +7,9 @@ import {
   useTheme,
   alpha,
 } from '@mui/material';
+import ExtensionIcon from '@mui/icons-material/Extension';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 
 interface QAPair {
   id: number;
@@ -35,6 +38,53 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 }) => {
   const theme = useTheme();
   const currentQA = qaPairs[currentIndex];
+
+  // Common text field styles
+  const commonTextFieldStyles = {
+    lineHeight: 1.6,
+    '& textarea': {
+      padding: 0,
+    }
+  };
+
+  // Question and answer text styles
+  const qaTextStyles = {
+    ...commonTextFieldStyles,
+    fontSize: '1.1rem',
+  };
+
+  // Context text styles
+  const contextTextStyles = {
+    ...commonTextFieldStyles,
+    fontSize: '0.9rem',
+  };
+
+  // Common section header styles
+  const sectionHeaderStyles = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 1,
+    mb: 1,
+    '& .MuiSvgIcon-root': {
+      fontSize: '1.2rem',
+    }
+  };
+
+  // Section-specific color styles
+  const contextHeaderStyles = {
+    ...sectionHeaderStyles,
+    color: theme.palette.primary.main,
+  };
+
+  const questionHeaderStyles = {
+    ...sectionHeaderStyles,
+    color: theme.palette.secondary.main,
+  };
+
+  const answerHeaderStyles = {
+    ...sectionHeaderStyles,
+    color: theme.palette.success.main,
+  };
 
   if (qaPairs.length === 0) {
     return (
@@ -70,15 +120,15 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           backdropFilter: 'blur(20px)',
           borderRadius: 2,
         }}>
-          <Typography variant="overline" sx={{ 
-            display: 'block', 
-            mb: 1,
-            color: theme.palette.text.secondary,
-            letterSpacing: '0.1em',
-            fontWeight: 500
-          }}>
-            Context
-          </Typography>
+          <Box sx={contextHeaderStyles}>
+            <ExtensionIcon />
+            <Typography variant="overline" sx={{ 
+              letterSpacing: '0.1em',
+              fontWeight: 500
+            }}>
+              Context
+            </Typography>
+          </Box>
           <TextField
             multiline
             fullWidth
@@ -88,11 +138,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             InputProps={{
               disableUnderline: true,
               sx: {
-                fontSize: '1.1rem',
-                lineHeight: 1.6,
-                '& textarea': {
-                  padding: 0,
-                }
+                ...contextTextStyles,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
               }
             }}
           />
@@ -107,15 +154,15 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           backdropFilter: 'blur(20px)',
           borderRadius: 2,
         }}>
-          <Typography variant="overline" sx={{ 
-            display: 'block', 
-            mb: 1,
-            color: theme.palette.text.secondary,
-            letterSpacing: '0.1em',
-            fontWeight: 500
-          }}>
-            Question
-          </Typography>
+          <Box sx={questionHeaderStyles}>
+            <HelpOutlineIcon />
+            <Typography variant="overline" sx={{ 
+              letterSpacing: '0.1em',
+              fontWeight: 500
+            }}>
+              Question
+            </Typography>
+          </Box>
           <TextField
             multiline
             fullWidth
@@ -125,12 +172,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             InputProps={{
               disableUnderline: true,
               sx: {
-                fontSize: '1.25rem',
-                lineHeight: 1.6,
+                ...qaTextStyles,
                 fontWeight: 500,
-                '& textarea': {
-                  padding: 0,
-                }
+                fontFamily: 'var(--font-primary)',
               }
             }}
           />
@@ -145,15 +189,15 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           backdropFilter: 'blur(20px)',
           borderRadius: 2,
         }}>
-          <Typography variant="overline" sx={{ 
-            display: 'block', 
-            mb: 1,
-            color: theme.palette.text.secondary,
-            letterSpacing: '0.1em',
-            fontWeight: 500
-          }}>
-            Answer
-          </Typography>
+          <Box sx={answerHeaderStyles}>
+            <LightbulbOutlinedIcon />
+            <Typography variant="overline" sx={{ 
+              letterSpacing: '0.1em',
+              fontWeight: 500
+            }}>
+              Answer
+            </Typography>
+          </Box>
           <TextField
             multiline
             fullWidth
@@ -163,11 +207,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             InputProps={{
               disableUnderline: true,
               sx: {
-                fontSize: '1.1rem',
-                lineHeight: 1.6,
-                '& textarea': {
-                  padding: 0,
-                }
+                ...qaTextStyles,
+                fontFamily: 'var(--font-primary)',
               }
             }}
           />

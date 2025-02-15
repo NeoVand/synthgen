@@ -49,6 +49,7 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter'
 import { debounce } from 'lodash'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 
 // PDFJS
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
@@ -158,26 +159,33 @@ const createAppTheme = (mode: 'light' | 'dark') => createTheme({
     ...(mode === 'light' 
       ? {
           primary: {
-            main: '#3B82F6',
+            main: '#2563EB', // Brighter blue
             light: '#60A5FA',
-            dark: '#2563EB',
+            dark: '#1D4ED8',
           },
           secondary: {
-            main: '#10B981',
-            light: '#34D399',
-            dark: '#059669',
+            main: '#22C55E',
+            light: '#4ADE80',
+            dark: '#16A34A',
           },
           background: {
-            default: '#F0F4F8',
-            paper: '#F8FAFF',
+            default: '#F8FAFC',
+            paper: '#FFFFFF',
           },
           text: {
             primary: '#1E293B',
             secondary: '#64748B',
           },
           divider: 'rgba(148, 163, 184, 0.08)',
+          action: {
+            hover: 'rgba(37, 99, 235, 0.04)',
+            selected: 'rgba(37, 99, 235, 0.08)',
+            disabled: 'rgba(148, 163, 184, 0.3)',
+            disabledBackground: 'rgba(148, 163, 184, 0.12)',
+          },
         }
       : {
+          // Keep dark mode as is
           primary: {
             main: '#60A5FA',
             light: '#93C5FD',
@@ -259,40 +267,56 @@ const createAppTheme = (mode: 'light' | 'dark') => createTheme({
             boxShadow: 'none',
           },
         },
-        contained: {
-          backgroundColor: mode === 'light' ? alpha('#3B82F6', 0.9) : alpha('#60A5FA', 0.9),
+        contained: ({ theme }) => ({
+          backgroundColor: mode === 'light' 
+            ? alpha(theme.palette.primary.main, 0.9)
+            : alpha('#60A5FA', 0.9),
+          color: mode === 'light' ? '#FFFFFF' : undefined,
           '&:hover': {
-            backgroundColor: mode === 'light' ? '#3B82F6' : '#60A5FA',
+            backgroundColor: mode === 'light' 
+              ? theme.palette.primary.main
+              : '#60A5FA',
           },
-        },
-        outlined: {
+          // Add a subtle border in light mode
+          border: mode === 'light' ? '1px solid rgba(37, 99, 235, 0.1)' : 'none',
+        }),
+        outlined: ({ theme }) => ({
           border: 'none',
-          backgroundColor: mode === 'light' ? alpha('#3B82F6', 0.1) : alpha('#60A5FA', 0.1),
+          color: mode === 'light' ? theme.palette.primary.main : undefined,
+          backgroundColor: mode === 'light' 
+            ? alpha(theme.palette.primary.main, 0.08)
+            : alpha('#60A5FA', 0.1),
           '&:hover': {
             border: 'none',
-            backgroundColor: mode === 'light' ? alpha('#3B82F6', 0.15) : alpha('#60A5FA', 0.15),
+            backgroundColor: mode === 'light' 
+              ? alpha(theme.palette.primary.main, 0.12)
+              : alpha('#60A5FA', 0.15),
           },
-        },
+        }),
       },
     },
     MuiPaper: {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          ...(mode === 'light' ? GLASS_EFFECT_LIGHT : GLASS_EFFECT_DARK),
+          ...(mode === 'light' ? {
+            backgroundColor: 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(148, 163, 184, 0.08)',
+          } : GLASS_EFFECT_DARK),
         },
       },
     },
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(148, 163, 184, 0.08)',
           borderBottom: '1px solid',
-          borderBottomColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+          borderBottomColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(148, 163, 184, 0.08)',
         },
         head: {
           fontWeight: 600,
-          backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.8) : alpha('#FFFFFF', 0.3),
+          backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.8) : alpha('#FFFFFF', 0.8),
           backdropFilter: 'blur(20px)',
         },
       },
@@ -302,20 +326,20 @@ const createAppTheme = (mode: 'light' | 'dark') => createTheme({
         root: {
           '& .MuiOutlinedInput-root': {
             border: 'none',
-            backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.5) : alpha('#FFFFFF', 0.3),
+            backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.5) : alpha('#F8FAFC', 0.5),
             '& fieldset': {
-              border: 'none',
+              border: mode === 'light' ? '1px solid rgba(148, 163, 184, 0.2)' : 'none',
             },
             '&:hover': {
-              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.7) : alpha('#FFFFFF', 0.4),
+              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.7) : alpha('#F1F5F9', 0.7),
               '& fieldset': {
-                border: 'none',
+                border: mode === 'light' ? '1px solid rgba(37, 99, 235, 0.2)' : 'none',
               },
             },
             '&.Mui-focused': {
-              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.9) : alpha('#FFFFFF', 0.5),
+              backgroundColor: mode === 'dark' ? alpha('#1E293B', 0.9) : alpha('#F1F5F9', 0.9),
               '& fieldset': {
-                border: 'none',
+                border: mode === 'light' ? '1px solid rgba(37, 99, 235, 0.3)' : 'none',
               },
             },
           },
@@ -2033,19 +2057,60 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                             }}
                           />
                         </TableCell>
-                        {['Context', 'Question', 'Answer'].map(header => (
-                          <TableCell 
-                            key={header}
-                            sx={{
-                              bgcolor: theme.palette.mode === 'dark' 
-                                ? 'rgba(255, 255, 255, 0.05)'
-                                : 'rgba(0, 0, 0, 0.02)',
-                              fontWeight: 600,
-                            }}
-                          >
-                            {header}
-                          </TableCell>
-                        ))}
+                        <TableCell 
+                          sx={{
+                            bgcolor: theme.palette.mode === 'dark' 
+                              ? 'rgba(255, 255, 255, 0.05)'
+                              : 'rgba(0, 0, 0, 0.02)',
+                            fontWeight: 600
+                          }}
+                        >
+                          <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 1,
+                            color: theme.palette.primary.main
+                          }}>
+                            <ExtensionIcon sx={{ fontSize: '1.1rem' }} />
+                            Context
+                          </Box>
+                        </TableCell>
+                        <TableCell 
+                          sx={{
+                            bgcolor: theme.palette.mode === 'dark' 
+                              ? 'rgba(255, 255, 255, 0.05)'
+                              : 'rgba(0, 0, 0, 0.02)',
+                            fontWeight: 600
+                          }}
+                        >
+                          <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 1,
+                            color: theme.palette.secondary.main
+                          }}>
+                            <HelpOutlineIcon sx={{ fontSize: '1.1rem' }} />
+                            Question
+                          </Box>
+                        </TableCell>
+                        <TableCell 
+                          sx={{
+                            bgcolor: theme.palette.mode === 'dark' 
+                              ? 'rgba(255, 255, 255, 0.05)'
+                              : 'rgba(0, 0, 0, 0.02)',
+                            fontWeight: 600
+                          }}
+                        >
+                          <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 1,
+                            color: theme.palette.success.main
+                          }}>
+                            <LightbulbOutlinedIcon sx={{ fontSize: '1.1rem' }} />
+                            Answer
+                          </Box>
+                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
