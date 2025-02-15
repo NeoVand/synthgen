@@ -31,11 +31,12 @@ import SummarizeIcon from '@mui/icons-material/Summarize'
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer'
 import ExtensionIcon from '@mui/icons-material/Extension'
 import StopIcon from '@mui/icons-material/Stop'
-import ChevronRightIcon from '@mui/icons-material/ChevronRight'
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
+import FirstPageIcon from '@mui/icons-material/FirstPage'
+import LastPageIcon from '@mui/icons-material/LastPage'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import ViewColumnIcon from '@mui/icons-material/ViewColumn'
 import StyleIcon from '@mui/icons-material/Style'
+import AddIcon from '@mui/icons-material/Add'
 import { saveAs } from 'file-saver'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
@@ -135,14 +136,14 @@ function getSectionRegistry() {
 
 // Add these style constants at the top of the file
 const GLASS_EFFECT_LIGHT = {
-  backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  backgroundColor: 'rgba(255, 255, 255, 0.3)',
   backdropFilter: 'blur(20px)',
   border: 'none',
   boxShadow: 'none',
 };
 
 const GLASS_EFFECT_DARK = {
-  backgroundColor: 'rgba(30, 41, 59, 0.6)',
+  backgroundColor: 'rgba(20, 24, 33, 0.6)',
   backdropFilter: 'blur(20px)',
   border: 'none',
   boxShadow: 'none',
@@ -1131,6 +1132,26 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     );
   };
 
+  // Add this new function to handle creating empty rows/cards
+  const handleAddEmpty = () => {
+    const newId = qaPairs.length > 0 ? Math.max(...qaPairs.map(qa => qa.id)) + 1 : 1;
+    const newQA: QAPair = {
+      id: newId,
+      context: '',
+      question: '',
+      answer: '',
+      selected: false,
+      generating: {
+        question: false,
+        answer: false
+      }
+    };
+    setQaPairs(prev => [...prev, newQA]);
+    if (viewMode === 'flashcard') {
+      setCurrentIndex(qaPairs.length); // Move to the new card
+    }
+  };
+
   //------------------------------------------------------------------------------------
   //  Render UI
   //------------------------------------------------------------------------------------
@@ -1245,12 +1266,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   <Paper 
                     elevation={0}
                     sx={{ 
-                      bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                      bgcolor: theme.palette.background.paper,
                       transition: 'all 0.2s ease',
                       borderRadius: '8px',
                       overflow: 'hidden',
                       border: 'none',
-                      boxShadow: 'none'
+                      boxShadow: theme.palette.mode === 'dark' ? 'none' : '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
                     }}
                   >
                     <Box 
@@ -1710,13 +1731,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                     size="small"
                     sx={{ 
-                      color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.54)',
+                      color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.main',
                       '&:hover': {
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                        bgcolor: alpha(theme.palette.primary.main, 0.08),
                       },
                     }}
                   >
-                    {isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+                    {isSidebarCollapsed ? <LastPageIcon /> : <FirstPageIcon />}
                   </IconButton>
 
                   <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
@@ -1727,7 +1748,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       disableElevation
                       startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
                       onClick={viewMode === 'flashcard' ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerate}
-                      disabled={!rawText || qaPairs.length === 0}
+                      disabled={!ollamaSettings.model || qaPairs.length === 0}
                       sx={{
                         minWidth: '120px',
                         height: 32,
@@ -1754,6 +1775,39 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     </Button>
 
                     <Button
+                      color="primary"
+                      size="small"
+                      onClick={handleAddEmpty}
+                      startIcon={<AddIcon fontSize="small" />}
+                      sx={{
+                        ml: 1,
+                        height: 32,
+                        minWidth: 'auto',
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        color: theme.palette.primary.main,
+                        px: {
+                          xs: 1,
+                          sm: 2
+                        },
+                        '& .MuiButton-startIcon': {
+                          mr: {
+                            xs: 0,
+                            sm: 1
+                          }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.primary.main, 0.08),
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                        Add Empty
+                      </Box>
+                    </Button>
+
+                    <Button
                       color="error"
                       size="small"
                       onClick={handleDeleteSelected}
@@ -1768,13 +1822,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         fontSize: '0.875rem',
                         color: theme.palette.error.main,
                         px: {
-                          xs: 1, // Icon only on very small screens
-                          sm: 2  // Text + icon on larger screens
+                          xs: 1,
+                          sm: 2
                         },
                         '& .MuiButton-startIcon': {
                           mr: {
-                            xs: 0,  // No margin when text is hidden
-                            sm: 1   // Normal margin when text is shown
+                            xs: 0,
+                            sm: 1
                           }
                         },
                         '&:hover': {
@@ -1811,13 +1865,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         fontSize: '0.875rem',
                         color: theme.palette.primary.main,
                         px: {
-                          xs: 1, // Icon only on very small screens
-                          sm: 2  // Text + icon on larger screens
+                          xs: 1,
+                          sm: 2
                         },
                         '& .MuiButton-startIcon': {
                           mr: {
-                            xs: 0,  // No margin when text is hidden
-                            sm: 1   // Normal margin when text is shown
+                            xs: 0,
+                            sm: 1
                           }
                         },
                         '&:hover': {

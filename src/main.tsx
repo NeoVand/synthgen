@@ -53,8 +53,8 @@ function ThemeWrapper() {
             dark: mode === 'dark' ? '#4B7B61' : '#66A583',
           },
           background: {
-            default: mode === 'dark' ? '#0a0a0a' : '#F8FAFC',
-            paper: mode === 'dark' ? '#141414' : '#FFFFFF',
+            default: mode === 'dark' ? '#0F1117' : '#F0F4F8',
+            paper: mode === 'dark' ? '#1A1D27' : '#FFFFFF',
           },
           text: {
             primary: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.85)',
