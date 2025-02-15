@@ -1899,10 +1899,16 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               </Box>
             </Box>
 
-            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+            <Box sx={{ 
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              minHeight: 0 // This is important for flex child scrolling
+            }}>
               {viewMode === 'table' ? (
                 <TableContainer sx={{ 
-                  flex: 1, 
+                  height: '100%',
                   overflow: 'auto',
                   '&::-webkit-scrollbar': {
                     width: '8px',
