@@ -38,12 +38,17 @@ import StopIcon from '@mui/icons-material/Stop'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import ViewColumnIcon from '@mui/icons-material/ViewColumn'
+import StyleIcon from '@mui/icons-material/Style'
 import { saveAs } from 'file-saver'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { getReorderDestinationIndex } from '@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index'
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter'
+import { debounce } from 'lodash'
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 
 // PDFJS
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
@@ -52,6 +57,7 @@ GlobalWorkerOptions.workerSrc = '/node_modules/pdfjs-dist/build/pdf.worker.mjs'
 import { renderAsync } from 'docx-preview'
 
 import OllamaSettings from './components/OllamaSettings'
+import FlashcardView from './components/FlashcardView'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -418,6 +424,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isResizing, setIsResizing] = useState<boolean>(false);
 
+  // Add this with other state declarations
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+
   // Add resize handler
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return;
@@ -446,7 +455,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // 1. Load Model Settings
   //------------------------------------------------------------------------------------
   const handleSettingsSave = (newSettings: OllamaSettingsType) => {
-    setOllamaSettings(newSettings)
+    if (JSON.stringify(newSettings) !== JSON.stringify(ollamaSettings)) {
+      setOllamaSettings(newSettings)
+    }
   }
 
   //------------------------------------------------------------------------------------
@@ -508,7 +519,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
-        abortControllerRef.current = null; // Clear the reference
       }
       setIsGenerating(false);
       setGenerationType(null);
@@ -598,10 +608,23 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // 5. Generate Q&A (Streaming)
   //------------------------------------------------------------------------------------
 
-  // A helper for streaming calls
+  // Add a debounced update function using useCallback
+  const debouncedUpdateQaPairs = useCallback(
+    debounce((id: number, updates: Partial<QAPair>) => {
+      setQaPairs(prev =>
+        prev.map(qa =>
+          qa.id === id ? { ...qa, ...updates } : qa
+        )
+      );
+    }, 100),
+    []
+  );
+
+  // Modify the doStreamCall function to use a buffer
   const doStreamCall = async function* (prompt: string) {
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
     let response: Response | null = null;
+    let buffer = '';
     
     try {
       if (shouldStopGeneration) {
@@ -662,9 +685,15 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             try {
               const response = JSON.parse(line);
               if (response.response) {
-                yield response.response;
+                buffer += response.response;
+                // Only yield when buffer reaches threshold or contains newline
+                if (buffer.length >= 50 || buffer.includes('\n')) {
+                  yield buffer;
+                  buffer = '';
+                }
               }
-              if (response.done) {
+              if (response.done && buffer.length > 0) {
+                yield buffer;
                 return;
               }
             } catch (e) {
@@ -674,34 +703,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           }
         }
       } finally {
-        // Always release the reader if we have one
         if (reader) {
           try {
             await reader.cancel();
           } catch (e) {
             console.error('Error canceling reader:', e);
           }
-          reader = null;
         }
       }
     } catch (error: unknown) {
       if (error instanceof Error && (error.name === 'AbortError' || error.message === 'AbortError')) {
-        // Ensure reader is cleaned up on abort
-        if (reader) {
-          try {
-            await reader.cancel();
-          } catch (e) {
-            console.error('Error canceling reader:', e);
-          }
-          reader = null;
-        }
-        console.log('Generation stopped by user');
-        throw error; // Re-throw to break out of all loops
+        throw error;
       }
       console.error('Streaming error:', error);
       throw error;
     } finally {
-      // Final cleanup
       if (reader) {
         try {
           await reader.cancel();
@@ -722,150 +738,138 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }
   };
 
+  const generateQA = async (row: QAPair) => {
+    let questionText = '';
+    let answerText = '';
+
+    // Set initial generating state
+    setQaPairs(prev =>
+      prev.map(r =>
+        r.id === row.id ? { ...r, generating: { question: true, answer: false } } : r
+      )
+    );
+
+    try {
+      // Generate question
+      const questionPrompt = `${promptQuestion}\n\nSummary:\n${docSummary}\n\nChunk:\n${row.context}`;
+      for await (const chunk of doStreamCall(questionPrompt)) {
+        if (shouldStopGeneration) break;
+        questionText += chunk;
+        debouncedUpdateQaPairs(row.id, { question: questionText });
+      }
+
+      if (shouldStopGeneration) return;
+
+      // Update question and set answer generating state
+      setQaPairs(prev =>
+        prev.map(r =>
+          r.id === row.id ? { ...r, question: questionText, generating: { question: false, answer: true } } : r
+        )
+      );
+
+      // Generate answer
+      const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${row.context}\nQuestion:\n${questionText}`;
+      for await (const chunk of doStreamCall(answerPrompt)) {
+        if (shouldStopGeneration) break;
+        answerText += chunk;
+        debouncedUpdateQaPairs(row.id, { answer: answerText });
+      }
+
+      // Final update
+      setQaPairs(prev =>
+        prev.map(r =>
+          r.id === row.id ? {
+            ...r,
+            question: questionText,
+            answer: answerText,
+            generating: { question: false, answer: false }
+          } : r
+        )
+      );
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+        throw err;
+      }
+      console.error('Error generating Q&A:', err);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (isGenerating) {
+      setShouldStopGeneration(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress('Generation stopped.');
+      return;
+    }
+
+    if (!ollamaSettings.model) {
+      alert('No model selected! Please check Ollama settings.');
+      return;
+    }
+
+    if (viewMode === 'flashcard') {
+      const currentQA = qaPairs[currentIndex];
+      if (currentQA) {
+        await generateQA(currentQA);
+      }
+      return;
+    }
+
+    const rowsToProcess = qaPairs.filter(q => q.selected).length > 0 
+      ? qaPairs.filter(q => q.selected)
+      : qaPairs;
+
+    if (rowsToProcess.length === 0) {
+      alert('No rows to process.');
+      return;
+    }
+
+    setShouldStopGeneration(false);
+    setIsGenerating(true);
+    setGenerationType('qa');
+
+    try {
+      for (let i = 0; i < rowsToProcess.length; i++) {
+        if (shouldStopGeneration) break;
+        const row = rowsToProcess[i];
+        setGenerationProgress(`Generating row ${row.id}...`);
+        await generateQA(row);
+      }
+    } catch (err) {
+      console.error('Error in generation process:', err);
+    } finally {
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress(shouldStopGeneration ? 'Generation stopped.' : 'Generation complete.');
+      setShouldStopGeneration(false);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
   //------------------------------------------------------------------------------------
   // 6. Delete / Generate
   //------------------------------------------------------------------------------------
   const handleDeleteSelected = () => {
-    const remaining = qaPairs.filter((q) => !q.selected)
-    setQaPairs(remaining)
-  }
-
-  const handleGenerate = async () => {
-    if (isGenerating) {
-      setShouldStopGeneration(true)
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-      setIsGenerating(false)
-      setGenerationType(null)
-      setGenerationProgress('Generation stopped.')
-      return
-    }
-
-    if (!ollamaSettings.model) {
-      alert('No model selected! Please check Ollama settings.')
-      return
-    }
-    
-    const rowsToProcess = qaPairs.filter(q => q.selected).length > 0 
-      ? qaPairs.filter(q => q.selected)
-      : qaPairs
-
-    if (rowsToProcess.length === 0) {
-      alert('No rows to process.')
-      return
-    }
-
-    setShouldStopGeneration(false)
-    setIsGenerating(true)
-    setGenerationType('qa')
-
-    try {
-      for (let i = 0; i < rowsToProcess.length; i++) {
-        if (shouldStopGeneration) {
-          throw new Error('AbortError')
-        }
-
-        const row = rowsToProcess[i]
-        
-        // Generate question
-        setGenerationProgress(`Generating row ${row.id}... (question)`)
-        let questionText = ''
-        const questionPrompt = `${promptQuestion}\n\nSummary:\n${docSummary}\n\nChunk:\n${row.context}`
-        
-        try {
-          // Set generating flag for question
-          setQaPairs((prev) =>
-            prev.map((r) =>
-              r.id === row.id ? { ...r, generating: { question: true, answer: false } } : r
-            )
-          )
-
-          for await (const chunk of doStreamCall(questionPrompt)) {
-            if (shouldStopGeneration) {
-              throw new Error('AbortError')
-            }
-            questionText += chunk
-            setQaPairs((prev) =>
-              prev.map((r) =>
-                r.id === row.id ? { ...r, question: questionText } : r
-              )
-            )
-          }
-
-          // Reset generating flag for question after completion
-          setQaPairs((prev) =>
-            prev.map((r) =>
-              r.id === row.id ? { ...r, generating: { question: false, answer: false }, question: questionText } : r
-            )
-          )
-        } catch (err) {
-          if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
-            throw err // Re-throw to break out of everything
-          }
-          console.error('Error generating question:', err)
-          continue
-        }
-
-        if (shouldStopGeneration) {
-          throw new Error('AbortError')
-        }
-        
-        // Generate answer
-        setGenerationProgress(`Generating row ${row.id}... (answer)`)
-        let answerText = ''
-        const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${row.context}\nQuestion:\n${row.question}`
-        
-        try {
-          // Set generating flag for answer
-          setQaPairs((prev) =>
-            prev.map((r) =>
-              r.id === row.id ? { ...r, generating: { question: false, answer: true } } : r
-            )
-          )
-
-          for await (const chunk of doStreamCall(answerPrompt)) {
-            if (shouldStopGeneration) {
-              throw new Error('AbortError')
-            }
-            answerText += chunk
-            setQaPairs((prev) =>
-              prev.map((r) =>
-                r.id === row.id ? { ...r, answer: answerText } : r
-              )
-            )
-          }
-
-          // Reset generating flag for answer after completion
-          setQaPairs((prev) =>
-            prev.map((r) =>
-              r.id === row.id ? { ...r, generating: { question: false, answer: false }, answer: answerText } : r
-            )
-          )
-        } catch (err) {
-          if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
-            throw err // Re-throw to break out of everything
-          }
-          console.error('Error generating answer:', err)
+    if (viewMode === 'flashcard') {
+      const currentQA = qaPairs[currentIndex];
+      if (currentQA) {
+        setQaPairs(prev => prev.filter(qa => qa.id !== currentQA.id));
+        if (currentIndex >= qaPairs.length - 1) {
+          setCurrentIndex(Math.max(0, qaPairs.length - 2));
         }
       }
-    } catch (err) {
-      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
-        console.log('Generation process stopped by user')
-      } else {
-        console.error('Error in generation process:', err)
-      }
-    } finally {
-      setIsGenerating(false)
-      setGenerationType(null)
-      setGenerationProgress(shouldStopGeneration ? 'Generation stopped.' : 'Generation complete.')
-      setShouldStopGeneration(false)
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
+    } else {
+      const remaining = qaPairs.filter((q) => !q.selected);
+      setQaPairs(remaining);
     }
-  }
+  };
 
   //------------------------------------------------------------------------------------
   // 7. Export CSV
@@ -1061,6 +1065,251 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }
   }, [isGenerating]);
 
+  // Add this new state for view mode
+  const [viewMode, setViewMode] = useState<'table' | 'flashcard'>('table');
+
+  // Effect to handle currentIndex changes
+  useEffect(() => {
+    if (currentIndex >= qaPairs.length) {
+      setCurrentIndex(Math.max(0, qaPairs.length - 1));
+    }
+  }, [qaPairs.length, currentIndex]);
+
+  const handleViewModeToggle = () => {
+    const newMode = viewMode === 'table' ? 'flashcard' : 'table';
+    
+    if (newMode === 'flashcard') {
+      const selectedQaPairs = qaPairs.filter(qa => qa.selected);
+      if (selectedQaPairs.length > 0) {
+        const selectedIndex = qaPairs.findIndex(qa => qa.id === selectedQaPairs[0].id);
+        setCurrentIndex(selectedIndex);
+      }
+    }
+    
+    setViewMode(newMode);
+  };
+
+  const handleDeleteCard = (cardId: number) => {
+    setQaPairs(prev => prev.filter(qa => qa.id !== cardId));
+  };
+
+  const handleUpdateQA = (updatedQA: QAPair) => {
+    setQaPairs(prev => prev.map(qa => qa.id === updatedQA.id ? updatedQA : qa));
+  };
+
+  const handleSingleCardGenerate = async (cardId: number) => {
+    if (isGenerating) {
+      setShouldStopGeneration(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress('Generation stopped.');
+      return;
+    }
+
+    if (!ollamaSettings.model) {
+      alert('No model selected! Please check Ollama settings.');
+      return;
+    }
+
+    const qa = qaPairs.find(q => q.id === cardId);
+    if (!qa) return;
+
+    setShouldStopGeneration(false);
+    setIsGenerating(true);
+    setGenerationType('qa');
+
+    try {
+      // Generate question
+      setGenerationProgress(`Generating question...`);
+      let questionText = '';
+      const questionPrompt = `${promptQuestion}\n\nSummary:\n${docSummary}\n\nChunk:\n${qa.context}`;
+
+      try {
+        setQaPairs(prev =>
+          prev.map(r =>
+            r.id === cardId ? { ...r, generating: { question: true, answer: false } } : r
+          )
+        );
+
+        for await (const chunk of doStreamCall(questionPrompt)) {
+          if (shouldStopGeneration) {
+            throw new Error('AbortError');
+          }
+          questionText += chunk;
+          // Update state with accumulated text
+          setQaPairs(prev =>
+            prev.map(r =>
+              r.id === cardId ? { ...r, question: questionText } : r
+            )
+          );
+        }
+
+        // Reset generating flag for question after completion
+        setQaPairs(prev =>
+          prev.map(r =>
+            r.id === cardId ? { ...r, generating: { question: false, answer: false }, question: questionText } : r
+          )
+        );
+      } catch (err) {
+        if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+          throw err;
+        }
+        console.error('Error generating question:', err);
+        return;
+      }
+
+      if (shouldStopGeneration) {
+        throw new Error('AbortError');
+      }
+
+      // Generate answer
+      setGenerationProgress(`Generating answer...`);
+      let answerText = '';
+      const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${qa.context}\nQuestion:\n${questionText}`;
+
+      try {
+        setQaPairs(prev =>
+          prev.map(r =>
+            r.id === cardId ? { ...r, generating: { question: false, answer: true } } : r
+          )
+        );
+
+        for await (const chunk of doStreamCall(answerPrompt)) {
+          if (shouldStopGeneration) {
+            throw new Error('AbortError');
+          }
+          answerText += chunk;
+          // Update state with accumulated text
+          setQaPairs(prev =>
+            prev.map(r =>
+              r.id === cardId ? { ...r, answer: answerText } : r
+            )
+          );
+        }
+
+        // Reset generating flag for answer after completion
+        setQaPairs(prev =>
+          prev.map(r =>
+            r.id === cardId ? { ...r, generating: { question: false, answer: false }, answer: answerText } : r
+          )
+        );
+      } catch (err) {
+        if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+          throw err;
+        }
+        console.error('Error generating answer:', err);
+      }
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+        console.log('Generation process stopped by user');
+      } else {
+        console.error('Error in generation process:', err);
+      }
+    } finally {
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress(shouldStopGeneration ? 'Generation stopped.' : 'Generation complete.');
+      setShouldStopGeneration(false);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
+  const handleCardChange = (index: number) => {
+    setCurrentIndex(index);
+  };
+
+  // Add this component for the card navigation
+  const CardNavigation: React.FC<{
+    currentIndex: number;
+    totalCards: number;
+    onCardChange: (index: number) => void;
+  }> = ({ currentIndex, totalCards, onCardChange }) => {
+    const theme = useTheme();
+    
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center',
+        gap: 1,
+      }}>
+        <Tooltip title={currentIndex > 0 ? "Previous card" : "No previous card"}>
+          <span>
+            <IconButton 
+              onClick={() => onCardChange(currentIndex - 1)} 
+              disabled={currentIndex <= 0}
+              size="small"
+              sx={{
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                '&:hover': {
+                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+                },
+              }}
+            >
+              <NavigateBeforeIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+        
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          gap: 1,
+        }}>
+          <TextField
+            size="small"
+            value={currentIndex + 1}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              if (!isNaN(value) && value >= 1 && value <= totalCards) {
+                onCardChange(value - 1);
+              }
+            }}
+            inputProps={{
+              style: { 
+                textAlign: 'center',
+                padding: '4px 8px',
+                width: '40px'
+              }
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+              }
+            }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            / {totalCards}
+          </Typography>
+        </Box>
+
+        <Tooltip title={currentIndex < totalCards - 1 ? "Next card" : "No more cards"}>
+          <span>
+            <IconButton 
+              onClick={() => onCardChange(currentIndex + 1)} 
+              disabled={currentIndex >= totalCards - 1}
+              size="small"
+              sx={{
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                '&:hover': {
+                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+                },
+              }}
+            >
+              <NavigateNextIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+    );
+  };
+
   //------------------------------------------------------------------------------------
   //  Render UI
   //------------------------------------------------------------------------------------
@@ -1119,15 +1368,30 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             >
               Q&A Generator
             </Typography>
-            <IconButton 
-              onClick={onThemeChange} 
-              size="small"
-              sx={{ 
-                color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.main'
-              }}
-            >
-              {theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'flex-end', p: 1 }}>
+              <Tooltip title={`Switch to ${viewMode === 'table' ? 'flashcard' : 'table'} view`}>
+                <IconButton
+                  onClick={handleViewModeToggle}
+                  size="small"
+                  sx={{ 
+                    color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.main'
+                  }}
+                >
+                  {viewMode === 'table' ? <StyleIcon /> : <ViewColumnIcon />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={theme.palette.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                <IconButton
+                  onClick={onThemeChange} 
+                  size="small"
+                  sx={{ 
+                    color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.main'
+                  }}
+                >
+                  {theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
 
           {/* Sidebar Content */}
@@ -1613,7 +1877,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                 : alpha('#FFFFFF', 0.5),
               backdropFilter: 'blur(20px)',
             })}>
-              <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                 <IconButton
                   onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                   size="small"
@@ -1632,7 +1896,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   color={isGenerating && generationType === 'qa' ? "error" : "primary"}
                   size="small"
                   startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
-                  onClick={handleGenerate}
+                  onClick={viewMode === 'flashcard' ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerate}
                   disabled={!rawText || qaPairs.length === 0}
                   sx={{
                     textTransform: 'none',
@@ -1643,7 +1907,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     }
                   }}
                 >
-                  {isGenerating && generationType === 'qa' ? "Stop Generation" : "Generate Q&A"}
+                  {isGenerating && generationType === 'qa' 
+                    ? "Stop Generation" 
+                    : viewMode === 'flashcard' 
+                      ? "Generate Card" 
+                      : "Generate Q&A"}
                 </Button>
                 <Button
                   variant="outlined"
@@ -1657,296 +1925,290 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     fontWeight: 500
                   }}
                 >
-                  Delete Selected
+                  Delete
                 </Button>
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  size="small"
-                  startIcon={<SaveAltIcon />}
-                  onClick={handleExportCSV}
-                  disabled={qaPairs.length === 0}
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 500
-                  }}
-                >
-                  Export CSV
-                </Button>
+                {viewMode === 'table' ? (
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    startIcon={<SaveAltIcon />}
+                    onClick={handleExportCSV}
+                    disabled={qaPairs.length === 0}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 500
+                    }}
+                  >
+                    Export CSV
+                  </Button>
+                ) : (
+                  <CardNavigation 
+                    currentIndex={currentIndex}
+                    totalCards={qaPairs.length}
+                    onCardChange={handleCardChange}
+                  />
+                )}
               </Box>
             </Box>
 
-            {isGenerating && (
-              <Box sx={{ 
-                p: 2, 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1.5,
-                bgcolor: theme.palette.mode === 'dark' 
-                  ? 'rgba(255, 255, 255, 0.02)' 
-                  : 'rgba(0, 0, 0, 0.02)',
-                borderBottom: 1,
-                borderColor: 'divider'
-              }}>
-                <CircularProgress size={16} />
-                <Typography 
-                  variant="body2" 
-                  sx={{ 
-                    color: theme.palette.text.secondary,
-                    fontWeight: 500
-                  }}
-                >
-                  {generationProgress}
-                </Typography>
-              </Box>
-            )}
-
-            <TableContainer sx={{ 
-              flex: 1, 
-              overflow: 'auto',
-              '&::-webkit-scrollbar': {
-                width: '8px',
-                height: '8px'
-              },
-              '&::-webkit-scrollbar-track': {
-                background: 'transparent'
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: theme.palette.mode === 'dark' 
-                  ? 'rgba(255, 255, 255, 0.1)' 
-                  : 'rgba(0, 0, 0, 0.1)',
-                borderRadius: '100px',
-                border: '2px solid transparent',
-                backgroundClip: 'padding-box',
-                '&:hover': {
-                  background: theme.palette.mode === 'dark' 
-                    ? 'rgba(255, 255, 255, 0.2)' 
-                    : 'rgba(0, 0, 0, 0.2)',
-                }
-              }
-            }}>
-              <Table size="small" stickyHeader sx={{
-                '& .MuiTableCell-root': {
-                  borderBottom: '1px solid',
-                  borderColor: theme.palette.divider,
-                  padding: '12px 16px',
-                  fontSize: '0.875rem',
-                  transition: 'background-color 0.2s ease',
-                },
-                '& .MuiTableHead-root .MuiTableCell-root': {
-                  fontWeight: 600,
-                  color: theme.palette.text.primary,
-                  backgroundColor: theme.palette.mode === 'dark' 
-                    ? alpha(theme.palette.background.paper, 0.9)
-                    : alpha(theme.palette.background.paper, 0.9),
-                  backdropFilter: 'blur(8px)',
-                  borderBottom: '2px solid',
-                  borderColor: theme.palette.divider,
-                  fontSize: '0.8125rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                },
-                '& .MuiTableBody-root .MuiTableRow-root': {
-                  '&:hover': {
-                    backgroundColor: theme.palette.mode === 'dark'
-                      ? alpha(theme.palette.primary.main, 0.04)
-                      : alpha(theme.palette.primary.main, 0.04),
+            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+              {viewMode === 'table' ? (
+                <TableContainer sx={{ 
+                  flex: 1, 
+                  overflow: 'auto',
+                  '&::-webkit-scrollbar': {
+                    width: '8px',
+                    height: '8px'
                   },
-                },
-                '& .MuiCheckbox-root': {
-                  padding: '4px',
-                  borderRadius: '6px',
-                  '&:hover': {
-                    backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                  '&::-webkit-scrollbar-track': {
+                    background: 'transparent'
                   },
-                },
-              }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell 
-                      padding="checkbox"
-                      sx={{
-                        bgcolor: theme.palette.mode === 'dark' 
-                          ? 'rgba(255, 255, 255, 0.05)'
-                          : 'rgba(0, 0, 0, 0.02)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <Checkbox
-                        checked={qaPairs.length > 0 && qaPairs.every(qa => qa.selected)}
-                        indeterminate={qaPairs.some(qa => qa.selected) && !qaPairs.every(qa => qa.selected)}
-                        onChange={(e) => {
-                          setQaPairs(prev => prev.map(row => ({ ...row, selected: e.target.checked })))
-                        }}
-                      />
-                    </TableCell>
-                    {['Context', 'Question', 'Answer'].map(header => (
-                      <TableCell 
-                        key={header}
-                        sx={{
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.05)'
-                            : 'rgba(0, 0, 0, 0.02)',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {header}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {qaPairs.map((qa, rowIndex) => (
-                    <TableRow 
-                      key={qa.id}
-                      sx={{
-                        bgcolor: theme.palette.mode === 'dark'
-                          ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
-                          : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
-                        '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark'
-                            ? 'rgba(255, 255, 255, 0.05)'
-                            : 'rgba(0, 0, 0, 0.05)',
-                        },
-                        borderBottom: '1px solid',
-                        borderColor: theme.palette.mode === 'dark' 
-                          ? 'rgba(255, 255, 255, 0.05)'
-                          : 'rgba(0, 0, 0, 0.05)',
-                      }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={!!qa.selected}
-                          onChange={(e) => {
-                            setQaPairs((prev) =>
-                              prev.map((row) =>
-                                row.id === qa.id ? { ...row, selected: e.target.checked } : row
-                              ),
-                            );
+                  '&::-webkit-scrollbar-thumb': {
+                    background: theme.palette.mode === 'dark' 
+                      ? 'rgba(255, 255, 255, 0.1)' 
+                      : 'rgba(0, 0, 0, 0.1)',
+                    borderRadius: '100px',
+                    border: '2px solid transparent',
+                    backgroundClip: 'padding-box',
+                    '&:hover': {
+                      background: theme.palette.mode === 'dark' 
+                        ? 'rgba(255, 255, 255, 0.2)' 
+                        : 'rgba(0, 0, 0, 0.2)',
+                    }
+                  }
+                }}>
+                  <Table size="small" stickyHeader sx={{
+                    '& .MuiTableCell-root': {
+                      borderBottom: '1px solid',
+                      borderColor: theme.palette.divider,
+                      padding: '12px 16px',
+                      fontSize: '0.875rem',
+                      transition: 'background-color 0.2s ease',
+                    },
+                    '& .MuiTableHead-root .MuiTableCell-root': {
+                      fontWeight: 600,
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? alpha(theme.palette.background.paper, 0.9)
+                        : alpha(theme.palette.background.paper, 0.9),
+                      backdropFilter: 'blur(8px)',
+                      borderBottom: '2px solid',
+                      borderColor: theme.palette.divider,
+                      fontSize: '0.8125rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    },
+                    '& .MuiTableBody-root .MuiTableRow-root': {
+                      '&:hover': {
+                        backgroundColor: theme.palette.mode === 'dark'
+                          ? alpha(theme.palette.primary.main, 0.04)
+                          : alpha(theme.palette.primary.main, 0.04),
+                      },
+                    },
+                    '& .MuiCheckbox-root': {
+                      padding: '4px',
+                      borderRadius: '6px',
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                      },
+                    },
+                  }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell 
+                          padding="checkbox"
+                          sx={{
+                            bgcolor: theme.palette.mode === 'dark' 
+                              ? 'rgba(255, 255, 255, 0.05)'
+                              : 'rgba(0, 0, 0, 0.02)',
+                            fontWeight: 600,
                           }}
-                        />
-                      </TableCell>
-                      {['context', 'question', 'answer'].map((columnType) => {
-                        const isGenerating = isCellGenerating(qa, columnType);
-                        const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGenerating;
-                        const content = qa[columnType as keyof typeof qa] as string;
-                        
-                        return (
+                        >
+                          <Checkbox
+                            checked={qaPairs.length > 0 && qaPairs.every(qa => qa.selected)}
+                            indeterminate={qaPairs.some(qa => qa.selected) && !qaPairs.every(qa => qa.selected)}
+                            onChange={(e) => {
+                              setQaPairs(prev => prev.map(row => ({ ...row, selected: e.target.checked })))
+                            }}
+                          />
+                        </TableCell>
+                        {['Context', 'Question', 'Answer'].map(header => (
                           <TableCell 
-                            key={columnType}
-                            onClick={() => toggleCellExpansion(qa.id, columnType)}
-                            sx={{ 
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease',
-                              padding: '4px 8px',
-                              minWidth: '200px',
-                              maxWidth: '400px',
-                              position: 'relative',
-                              '&:hover': {
-                                backgroundColor: theme.palette.mode === 'dark' 
-                                  ? 'rgba(255, 255, 255, 0.04)'
-                                  : 'rgba(0, 0, 0, 0.02)',
-                              },
+                            key={header}
+                            sx={{
+                              bgcolor: theme.palette.mode === 'dark' 
+                                ? 'rgba(255, 255, 255, 0.05)'
+                                : 'rgba(0, 0, 0, 0.02)',
+                              fontWeight: 600,
                             }}
                           >
-                            <Box sx={{ 
-                              position: 'relative',
-                              maxHeight: isExpanded ? 'none' : '4.5em',
-                              overflow: isExpanded ? 'visible' : 'auto',
-                              transition: 'all 0.2s ease',
-                              '&::-webkit-scrollbar': {
-                                width: '4px',
-                              },
-                              '&::-webkit-scrollbar-thumb': {
-                                backgroundColor: 'rgba(0,0,0,0.1)',
-                                borderRadius: '2px',
-                              },
-                              // Force height reset when not expanded
-                              height: isExpanded ? 'auto' : '4.5em',
-                            }}>
-                              <TextField
-                                multiline
-                                fullWidth
-                                variant="standard"
-                                value={content}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  setQaPairs((prev) =>
-                                    prev.map((row) =>
-                                      row.id === qa.id ? { ...row, [columnType]: e.target.value } : row
-                                    )
-                                  )
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                InputProps={{
-                                  disableUnderline: true,
-                                  sx: {
-                                    alignItems: 'flex-start',
-                                    padding: 0,
-                                    fontSize: '0.875rem',
-                                    lineHeight: 1.5,
-                                    minHeight: isExpanded ? 'auto' : '4.5em',
-                                    '& textarea': {
-                                      padding: 0,
-                                    }
-                                  }
-                                }}
-                                sx={{
-                                  width: '100%',
-                                  '& .MuiInputBase-root': {
-                                    padding: 0,
+                            {header}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {qaPairs.map((qa, rowIndex) => (
+                        <TableRow 
+                          key={qa.id}
+                          sx={{
+                            bgcolor: theme.palette.mode === 'dark'
+                              ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
+                              : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
+                            '&:hover': {
+                              bgcolor: theme.palette.mode === 'dark'
+                                ? 'rgba(255, 255, 255, 0.05)'
+                                : 'rgba(0, 0, 0, 0.05)',
+                            },
+                            borderBottom: '1px solid',
+                            borderColor: theme.palette.mode === 'dark' 
+                              ? 'rgba(255, 255, 255, 0.05)'
+                              : 'rgba(0, 0, 0, 0.05)',
+                          }}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={!!qa.selected}
+                              onChange={(e) => {
+                                setQaPairs((prev) =>
+                                  prev.map((row) =>
+                                    row.id === qa.id ? { ...row, selected: e.target.checked } : row
+                                  ),
+                                );
+                              }}
+                            />
+                          </TableCell>
+                          {['context', 'question', 'answer'].map((columnType) => {
+                            const isGenerating = isCellGenerating(qa, columnType);
+                            const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGenerating;
+                            const content = qa[columnType as keyof typeof qa] as string;
+                            
+                            return (
+                              <TableCell 
+                                key={columnType}
+                                onClick={() => toggleCellExpansion(qa.id, columnType)}
+                                sx={{ 
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease',
+                                  padding: '4px 8px',
+                                  minWidth: '200px',
+                                  maxWidth: '400px',
+                                  position: 'relative',
+                                  '&:hover': {
+                                    backgroundColor: theme.palette.mode === 'dark' 
+                                      ? 'rgba(255, 255, 255, 0.04)'
+                                      : 'rgba(0, 0, 0, 0.02)',
                                   },
                                 }}
-                              />
-                              {!isExpanded && content.split('\n').length > 3 && (
-                                <Box
-                                  sx={{
-                                    position: 'absolute',
-                                    bottom: 0,
-                                    left: 0,
-                                    right: 0,
-                                    height: '2em',
-                                    background: `linear-gradient(transparent, ${
-                                      theme.palette.mode === 'dark' 
-                                        ? 'rgba(0, 0, 0, 0.8)' 
-                                        : 'rgb(248, 249, 251)'
-                                    } 80%)`,
-                                    pointerEvents: 'none',
-                                    display: 'flex',
-                                    alignItems: 'flex-end',
-                                    justifyContent: 'center',
-                                    pb: 0.5,
-                                  }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    sx={{
-                                      color: theme.palette.text.disabled,
-                                      fontSize: '0.75rem',
+                              >
+                                <Box sx={{ 
+                                  position: 'relative',
+                                  maxHeight: isExpanded ? 'none' : '4.5em',
+                                  overflow: isExpanded ? 'visible' : 'auto',
+                                  transition: 'all 0.2s ease',
+                                  '&::-webkit-scrollbar': {
+                                    width: '4px',
+                                  },
+                                  '&::-webkit-scrollbar-thumb': {
+                                    backgroundColor: 'rgba(0,0,0,0.1)',
+                                    borderRadius: '2px',
+                                  },
+                                  // Force height reset when not expanded
+                                  height: isExpanded ? 'auto' : '4.5em',
+                                }}>
+                                  <TextField
+                                    multiline
+                                    fullWidth
+                                    variant="standard"
+                                    value={content}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      setQaPairs((prev) =>
+                                        prev.map((row) =>
+                                          row.id === qa.id ? { ...row, [columnType]: e.target.value } : row
+                                        )
+                                      )
                                     }}
-                                  >
-                                    •••
-                                  </Typography>
+                                    onClick={(e) => e.stopPropagation()}
+                                    InputProps={{
+                                      disableUnderline: true,
+                                      sx: {
+                                        alignItems: 'flex-start',
+                                        padding: 0,
+                                        fontSize: '0.875rem',
+                                        lineHeight: 1.5,
+                                        minHeight: isExpanded ? 'auto' : '4.5em',
+                                        '& textarea': {
+                                          padding: 0,
+                                        }
+                                      }
+                                    }}
+                                    sx={{
+                                      width: '100%',
+                                      '& .MuiInputBase-root': {
+                                        padding: 0,
+                                      },
+                                    }}
+                                  />
+                                  {!isExpanded && content.split('\n').length > 3 && (
+                                    <Box
+                                      sx={{
+                                        position: 'absolute',
+                                        bottom: 0,
+                                        left: 0,
+                                        right: 0,
+                                        height: '2em',
+                                        background: `linear-gradient(transparent, ${
+                                          theme.palette.mode === 'dark' 
+                                            ? 'rgba(0, 0, 0, 0.8)' 
+                                            : 'rgb(248, 249, 251)'
+                                        } 80%)`,
+                                        pointerEvents: 'none',
+                                        display: 'flex',
+                                        alignItems: 'flex-end',
+                                        justifyContent: 'center',
+                                        pb: 0.5,
+                                      }}
+                                    >
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: theme.palette.text.disabled,
+                                          fontSize: '0.75rem',
+                                        }}
+                                      >
+                                        •••
+                                      </Typography>
+                                    </Box>
+                                  )}
                                 </Box>
-                              )}
-                            </Box>
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                      {qaPairs.length === 0 && !isGenerating && (
+                        <TableRow>
+                          <TableCell colSpan={4}>
+                            <Typography variant="body2" color="text.secondary" align="center">
+                              No chunks/Q&A yet. Upload &amp; chunk, then generate Q&A.
+                            </Typography>
                           </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-                  {qaPairs.length === 0 && !isGenerating && (
-                    <TableRow>
-                      <TableCell colSpan={4}>
-                        <Typography variant="body2" color="text.secondary" align="center">
-                          No chunks/Q&A yet. Upload &amp; chunk, then generate Q&A.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <FlashcardView
+                  qaPairs={qaPairs}
+                  isGenerating={isGenerating}
+                  onUpdateQA={handleUpdateQA}
+                  currentIndex={currentIndex}
+                />
+              )}
+            </Box>
           </Paper>
         </Box>
       </Box>

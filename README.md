@@ -14,6 +14,8 @@ SynthGen is a user-friendly desktop application that helps you generate high-qua
 
 ✏️ **Interactive Editing**: Edit generated content directly in the interface
 
+💳 **Dual View Modes**: Switch between table view for bulk operations and flashcard view for focused editing
+
 💾 **Easy Export**: Export your dataset as CSV for immediate use
 
 🎛️ **Advanced Controls**: Fine-tune generation parameters (temperature, top-p, context size)
@@ -81,7 +83,7 @@ ollama serve
 6. (Optional) Generate and edit the document summary
 7. Configure chunking parameters and chunk your document
 8. Generate Q&A pairs
-9. Edit the generated content as needed
+9. Switch between table and flashcard views to edit content
 10. Export your dataset as CSV
 
 ## Use Cases
@@ -99,6 +101,8 @@ ollama serve
 - Leverage the summary feature to provide additional context for Q&A generation
 - Edit prompts to guide the type of questions and answers generated
 - Use selective generation to focus on specific sections of your document
+- Switch to flashcard view for focused editing and review of individual Q&A pairs
+- Use table view for bulk operations and overall dataset management
 
 ## Contributing
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Typography,
   FormControl,
@@ -58,6 +58,29 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Memoize the fetch models function
+  const fetchModels = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:11434/api/tags');
+      if (!response.ok) {
+        throw new Error('Failed to fetch models');
+      }
+      const data = await response.json();
+      setModels(data.models);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load models. Is Ollama running?');
+      console.error('Error fetching models:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch models on mount only
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
   // Add effect to update settings when initialSettings changes
   useEffect(() => {
     if (initialSettings) {
@@ -65,34 +88,15 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
     }
   }, [initialSettings]);
 
-  // Fetch available models from Ollama
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const response = await fetch('http://localhost:11434/api/tags');
-        if (!response.ok) {
-          throw new Error('Failed to fetch models');
-        }
-        const data = await response.json();
-        setModels(data.models);
-        setError(null);
-      } catch (err) {
-        setError('Failed to load models. Is Ollama running?');
-        console.error('Error fetching models:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchModels();
-  }, []);
-
   // Auto-apply changes when settings change if autoApply is true
   useEffect(() => {
-    if (autoApply) {
+    if (autoApply && initialSettings && settings !== initialSettings) {
       onSettingsSave(settings);
     }
-  }, [settings, autoApply, onSettingsSave]);
+  }, [settings, autoApply, onSettingsSave, initialSettings]);
+
+  // Memoize the filtered models
+  const availableModels = useMemo(() => models || [], [models]);
 
   return (
     <Box>
@@ -154,7 +158,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
           </Box>
         </Box>
         <Select
-          value={settings.model}
+          value={settings.model || ''}
           onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))}
           startAdornment={
             <MemoryIcon sx={{ 
@@ -164,6 +168,17 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
               opacity: 0.8
             }} />
           }
+          MenuProps={{
+            autoFocus: false,
+            disableAutoFocusItem: true,
+            onClose: () => {
+              const selectElement = document.querySelector('[aria-labelledby="model-select"]');
+              if (selectElement) {
+                (selectElement as HTMLElement).focus();
+              }
+            }
+          }}
+          id="model-select"
           sx={{
             '& .MuiSelect-select': {
               py: 1.5,
@@ -186,7 +201,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
               </Typography>
             </MenuItem>
           ) : (
-            models.map((model) => (
+            availableModels.map((model) => (
               <MenuItem 
                 key={model.name} 
                 value={model.name}
