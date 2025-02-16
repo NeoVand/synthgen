@@ -18,6 +18,7 @@ import {
   useTheme,
   alpha,
   Tooltip,
+  MenuItem,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
@@ -150,7 +151,8 @@ const GLASS_EFFECT_DARK = {
   boxShadow: 'none',
 };
 
-
+// Add type for chunking algorithms
+type ChunkingAlgorithm = 'recursive' | 'line' | 'line-with-header';
 
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // 1. Model Settings
@@ -192,6 +194,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // States for chunking
   const [chunkSize, setChunkSize] = useState<number>(500)
   const [chunkOverlap, setChunkOverlap] = useState<number>(0)
+  const [chunkingAlgorithm, setChunkingAlgorithm] = useState<ChunkingAlgorithm>('recursive')
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
   const [generationProgress, setGenerationProgress] = useState<string>('')
@@ -414,12 +417,37 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }
     setQaPairs([]) // reset
     try {
-      const splitter = new RecursiveCharacterTextSplitter({
-        chunkSize,
-        chunkOverlap,
-      })
-      const splitted = await splitter.splitText(rawText)
-      const pairs: QAPair[] = splitted.map((ck, idx) => ({
+      let chunks: string[] = [];
+
+      switch (chunkingAlgorithm) {
+        case 'recursive':
+          const splitter = new RecursiveCharacterTextSplitter({
+            chunkSize,
+            chunkOverlap,
+          })
+          chunks = await splitter.splitText(rawText)
+          break;
+
+        case 'line':
+          // Split by newlines and filter out empty lines
+          chunks = rawText.split('\n').filter(line => line.trim())
+          break;
+
+        case 'line-with-header':
+          const lines = rawText.split('\n').filter(line => line.trim());
+          if (lines.length === 0) break;
+          
+          // First line is the header
+          const header = lines[0];
+          // Rest are content lines
+          const contentLines = lines.slice(1);
+          
+          // For each content line, combine with header
+          chunks = contentLines.map(line => `${header}\n${line}`);
+          break;
+      }
+
+      const pairs: QAPair[] = chunks.map((ck, idx) => ({
         id: idx + 1,
         context: ck,
         question: '',
@@ -1585,9 +1613,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                               }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                   <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                    Chunk Size
+                                    Chunking Algorithm
                                   </Typography>
-                                  <Tooltip title="The size of each text chunk in characters. Larger chunks provide more context but may be harder to process. Recommended range: 200-1000." placement="right">
+                                  <Tooltip title="Choose how to split your document into chunks. 'Recursive' splits by character count, 'Line' splits by newlines, and 'Line+Header' treats the first line as a header and includes it with each chunk." placement="right">
                                     <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
                                       <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
                                     </IconButton>
@@ -1595,10 +1623,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 </Box>
                               </Box>
                               <TextField
-                                type="number"
+                                select
                                 fullWidth
-                                value={chunkSize}
-                                onChange={(e) => setChunkSize(Number(e.target.value))}
+                                value={chunkingAlgorithm}
+                                onChange={(e) => setChunkingAlgorithm(e.target.value as ChunkingAlgorithm)}
                                 className="no-drag"
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
@@ -1606,40 +1634,82 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                     fontSize: '0.875rem'
                                   }
                                 }}
-                              />
+                              >
+                                <MenuItem value="recursive">Recursive Character Splitter</MenuItem>
+                                <MenuItem value="line">Line by Line</MenuItem>
+                                <MenuItem value="line-with-header">Line + Header</MenuItem>
+                              </TextField>
                             </Box>
-                            <Box sx={{ mb: 2 }}>
-                              <Box sx={{ 
-                                display: 'flex', 
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                mb: 1 
-                              }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                    Overlap
-                                  </Typography>
-                                  <Tooltip title="The number of characters that overlap between consecutive chunks. This helps maintain context across chunk boundaries. Recommended: 10-20% of chunk size." placement="right">
-                                    <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
-                                      <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-                                    </IconButton>
-                                  </Tooltip>
+
+                            {chunkingAlgorithm === 'recursive' && (
+                              <>
+                                <Box sx={{ mb: 2 }}>
+                                  <Box sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    mb: 1 
+                                  }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                        Chunk Size
+                                      </Typography>
+                                      <Tooltip title="The size of each text chunk in characters. Larger chunks provide more context but may be harder to process. Recommended range: 200-1000." placement="right">
+                                        <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                          <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </Box>
+                                  </Box>
+                                  <TextField
+                                    type="number"
+                                    fullWidth
+                                    value={chunkSize}
+                                    onChange={(e) => setChunkSize(Number(e.target.value))}
+                                    className="no-drag"
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        borderRadius: '8px',
+                                        fontSize: '0.875rem'
+                                      }
+                                    }}
+                                  />
                                 </Box>
-                              </Box>
-                              <TextField
-                                type="number"
-                                fullWidth
-                                value={chunkOverlap}
-                                onChange={(e) => setChunkOverlap(Number(e.target.value))}
-                                className="no-drag"
-                                sx={{
-                                  '& .MuiOutlinedInput-root': {
-                                    borderRadius: '8px',
-                                    fontSize: '0.875rem'
-                                  }
-                                }}
-                              />
-                            </Box>
+                                <Box sx={{ mb: 2 }}>
+                                  <Box sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    mb: 1 
+                                  }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                        Overlap
+                                      </Typography>
+                                      <Tooltip title="The number of characters that overlap between consecutive chunks. This helps maintain context across chunk boundaries. Recommended: 10-20% of chunk size." placement="right">
+                                        <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                          <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </Box>
+                                  </Box>
+                                  <TextField
+                                    type="number"
+                                    fullWidth
+                                    value={chunkOverlap}
+                                    onChange={(e) => setChunkOverlap(Number(e.target.value))}
+                                    className="no-drag"
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        borderRadius: '8px',
+                                        fontSize: '0.875rem'
+                                      }
+                                    }}
+                                  />
+                                </Box>
+                              </>
+                            )}
+
                             <Button
                               variant="contained"
                               fullWidth
@@ -2051,7 +2121,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     <TableBody>
                       {qaPairs
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                        .map((qa, rowIndex) => (
+                        .map((qa, rowIndex) => {
+                          // Get the maximum height for this row based on expanded cells
+                          const isAnyExpanded = ['context', 'question', 'answer'].some(
+                            columnType => expandedCells[`${qa.id}-${columnType}`] || isCellGenerating(qa, columnType)
+                          );
+
+                          return (
                           <TableRow 
                             key={qa.id}
                             sx={{
@@ -2097,6 +2173,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                     minWidth: '200px',
                                     maxWidth: '400px',
                                     position: 'relative',
+                                    height: isAnyExpanded ? 'auto' : undefined,
                                     '&:hover': {
                                       backgroundColor: theme.palette.mode === 'dark' 
                                         ? 'rgba(255, 255, 255, 0.04)'
@@ -2106,7 +2183,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 >
                                   <Box sx={{ 
                                     position: 'relative',
-                                    maxHeight: isExpanded ? 'none' : '4.5em',
+                                    maxHeight: isAnyExpanded ? (isExpanded ? 'none' : '100%') : '4.5em',
                                     overflow: isExpanded ? 'visible' : 'auto',
                                     transition: 'all 0.2s ease',
                                     '&::-webkit-scrollbar': {
@@ -2117,7 +2194,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                       borderRadius: '2px',
                                     },
                                     // Force height reset when not expanded
-                                    height: isExpanded ? 'auto' : '4.5em',
+                                    height: isAnyExpanded ? (isExpanded ? 'auto' : '100%') : '4.5em',
                                   }}>
                                     <TextField
                                       multiline
@@ -2189,7 +2266,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                               );
                             })}
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       {qaPairs.length === 0 && !isGenerating && (
                         <TableRow>
                           <TableCell colSpan={4}>
