@@ -61,8 +61,6 @@ import { renderAsync } from 'docx-preview'
 
 import OllamaSettings from './components/OllamaSettings'
 import FlashcardView from './components/FlashcardView'
-import { checkOllamaConnection } from './config/api'
-import { OllamaConnectionError } from './components/OllamaConnectionError'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
