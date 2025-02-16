@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Typography,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Slider,
