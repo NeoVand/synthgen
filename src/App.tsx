@@ -197,7 +197,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   const [chunkingAlgorithm, setChunkingAlgorithm] = useState<ChunkingAlgorithm>('recursive')
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
-  const [generationProgress, setGenerationProgress] = useState<string>('')
   const theme = useTheme();
 
   // Add state for expanded cells and sections
@@ -353,7 +352,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       }
       setIsGenerating(false);
       setGenerationType(null);
-      setGenerationProgress('Summary generation stopped.');
       return;
     }
 
@@ -369,7 +367,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     setShouldStopGeneration(false);
     setIsGenerating(true);
     setGenerationType('summary');
-    setGenerationProgress('Generating summary...');
 
     try {
       let summaryText = '';
@@ -402,7 +399,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       }
       setIsGenerating(false);
       setGenerationType(null);
-      setGenerationProgress(shouldStopGeneration ? 'Summary generation stopped.' : 'Summary generation complete.');
       setShouldStopGeneration(false);
     }
   };
@@ -658,7 +654,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       }
       setIsGenerating(false);
       setGenerationType(null);
-      setGenerationProgress('Generation stopped.');
       return;
     }
 
@@ -692,7 +687,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       for (let i = 0; i < rowsToProcess.length; i++) {
         if (shouldStopGeneration) break;
         const row = rowsToProcess[i];
-        setGenerationProgress(`Generating row ${row.id}...`);
         await generateQA(row);
       }
     } catch (err) {
@@ -700,7 +694,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     } finally {
       setIsGenerating(false);
       setGenerationType(null);
-      setGenerationProgress(shouldStopGeneration ? 'Generation stopped.' : 'Generation complete.');
       setShouldStopGeneration(false);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -836,7 +829,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       return;
     }
 
-    const { section, previousIndex, currentIndex, numberOfSections } = lastSectionMoved;
+    const { section} = lastSectionMoved;
     const element = registry.getElement(section.id);
     if (element) {
       // Simple flash effect on drop
@@ -957,7 +950,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       }
       setIsGenerating(false);
       setGenerationType(null);
-      setGenerationProgress('Generation stopped.');
       return;
     }
 
@@ -975,7 +967,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
     try {
       // Generate question
-      setGenerationProgress(`Generating question...`);
       let questionText = '';
       const questionPrompt = `${promptQuestion}\n\nSummary:\n${docSummary}\n\nChunk:\n${qa.context}`;
 
@@ -1018,7 +1009,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       }
 
       // Generate answer
-      setGenerationProgress(`Generating answer...`);
       let answerText = '';
       const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${qa.context}\nQuestion:\n${questionText}`;
 
@@ -1063,7 +1053,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     } finally {
       setIsGenerating(false);
       setGenerationType(null);
-      setGenerationProgress(shouldStopGeneration ? 'Generation stopped.' : 'Generation complete.');
       setShouldStopGeneration(false);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -2286,7 +2275,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     component="div"
                     count={qaPairs.length}
                     page={page}
-                    onPageChange={(event, newPage) => {
+                    onPageChange={(_, newPage) => {
                       setPage(newPage);
                       // Reset expanded cells when changing pages
                       setExpandedCells({});
@@ -2312,7 +2301,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               ) : (
                 <FlashcardView
                   qaPairs={qaPairs}
-                  isGenerating={isGenerating}
                   onUpdateQA={handleUpdateQA}
                   currentIndex={currentIndex}
                   chunkingAlgorithm={chunkingAlgorithm}
