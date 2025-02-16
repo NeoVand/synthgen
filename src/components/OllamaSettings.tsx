@@ -20,6 +20,8 @@ import TuneIcon from '@mui/icons-material/Tune';
 import MemoryIcon from '@mui/icons-material/Memory';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
+const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434';
+
 interface OllamaSettings {
   model: string;
   temperature: number;
@@ -60,7 +62,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
   // Memoize the fetch models function
   const fetchModels = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:11434/api/tags');
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
       if (!response.ok) {
         throw new Error('Failed to fetch models');
       }
@@ -68,7 +70,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
       setModels(data.models);
       setError(null);
     } catch (err) {
-      setError('Failed to load models. Please ensure:\n1. Ollama is running on your machine\n2. Start Ollama with CORS enabled:\nOLLAMA_ORIGINS=http://localhost:5173 ollama serve');
+      setError('Failed to load models. Please ensure:\n1. Ollama is running on your machine\n2. Start Ollama with CORS enabled:\nOLLAMA_ORIGINS=* ollama serve\n3. Ollama is accessible at: ' + OLLAMA_BASE_URL);
       console.error('Error fetching models:', err);
     } finally {
       setLoading(false);
