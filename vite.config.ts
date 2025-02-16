@@ -42,14 +42,18 @@ export default defineConfig({
     include: ['pdfjs-dist']
   },
   build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
     rollupOptions: {
       output: {
         manualChunks: {
           pdfjs: ['pdfjs-dist']
-        }
+        },
+        assetFileNames: 'assets/[name].[ext]',
+        chunkFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/[name].js'
       }
     },
-    assetsDir: 'assets',
     copyPublicDir: true
   },
   worker: {

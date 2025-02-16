@@ -55,10 +55,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import * as PDFJS from 'pdfjs-dist'
 const { getDocument, GlobalWorkerOptions } = PDFJS;
 // Update worker path to use the correct path in both dev and prod
-GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url
-).href;
+GlobalWorkerOptions.workerSrc = `${window.location.origin}${import.meta.env.BASE_URL}pdf.worker.mjs`;
 // DOCX
 import { renderAsync } from 'docx-preview'
 
