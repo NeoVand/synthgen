@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 
 export default defineConfig({
-  base: './',
   plugins: [
     react(),
     {
@@ -60,8 +59,8 @@ export default defineConfig({
     format: 'es'
   },
   server: {
-    headers: {
-      'Content-Type': 'application/javascript'
-    }
+    port: 3000,
+    host: true,
+    open: true
   }
 })
