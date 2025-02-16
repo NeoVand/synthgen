@@ -945,10 +945,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     setViewMode(newMode);
   };
 
-  const handleDeleteCard = (cardId: number) => {
-    setQaPairs(prev => prev.filter(qa => qa.id !== cardId));
-  };
-
   const handleUpdateQA = (updatedQA: QAPair) => {
     setQaPairs(prev => prev.map(qa => qa.id === updatedQA.id ? updatedQA : qa));
   };

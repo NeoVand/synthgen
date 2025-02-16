@@ -25,7 +25,6 @@ interface QAPair {
 
 interface FlashcardViewProps {
   qaPairs: QAPair[];
-  isGenerating: boolean;
   onUpdateQA: (updatedQA: QAPair) => void;
   currentIndex: number;
   chunkingAlgorithm: 'recursive' | 'line' | 'line-with-header';
@@ -33,7 +32,6 @@ interface FlashcardViewProps {
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({
   qaPairs,
-  isGenerating,
   onUpdateQA,
   currentIndex,
   chunkingAlgorithm,
