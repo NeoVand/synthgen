@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
+import { resolve } from 'path'
 
 export default defineConfig({
   base: '/',
@@ -43,9 +44,19 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        'pdf.worker': resolve(__dirname, 'public/pdf.worker.mjs')
+      },
       output: {
         manualChunks: {
           pdfjs: ['pdfjs-dist']
+        },
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'pdf.worker.mjs') {
+            return 'pdf.worker.mjs';
+          }
+          return 'assets/[name]-[hash][extname]';
         }
       }
     }
