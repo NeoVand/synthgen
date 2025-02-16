@@ -1,25 +1,25 @@
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { existsSync, mkdirSync, copyFileSync } from 'fs';
+import { promises as fs } from 'fs';
+import path from 'path';
 
-// Get current file's directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+async function copyPdfWorker() {
+  try {
+    // Ensure public directory exists
+    try {
+      await fs.access('public');
+    } catch {
+      await fs.mkdir('public');
+    }
 
-// Ensure public directory exists
-const publicDir = join(dirname(__dirname), 'public');
-if (!existsSync(publicDir)) {
-  mkdirSync(publicDir);
+    // Copy worker file
+    const workerPath = path.resolve('node_modules/pdfjs-dist/build/pdf.worker.mjs');
+    const destPath = path.resolve('public/pdf.worker.mjs');
+
+    await fs.copyFile(workerPath, destPath);
+    console.log('PDF worker file copied successfully');
+  } catch (error) {
+    console.error('Error copying PDF worker file:', error);
+    process.exit(1);
+  }
 }
 
-// Copy worker file
-const workerSrc = join(dirname(__dirname), 'node_modules/pdfjs-dist/build/pdf.worker.mjs');
-const workerDest = join(publicDir, 'pdf.worker.mjs');
-
-try {
-  copyFileSync(workerSrc, workerDest);
-  console.log('PDF worker file copied successfully');
-} catch (error) {
-  console.error('Error copying PDF worker file:', error);
-  process.exit(1);
-} 
+copyPdfWorker(); 
