@@ -28,6 +28,7 @@ interface FlashcardViewProps {
   isGenerating: boolean;
   onUpdateQA: (updatedQA: QAPair) => void;
   currentIndex: number;
+  chunkingAlgorithm: 'recursive' | 'line' | 'line-with-header';
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({
@@ -35,6 +36,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   isGenerating,
   onUpdateQA,
   currentIndex,
+  chunkingAlgorithm,
 }) => {
   const theme = useTheme();
   const currentQA = qaPairs[currentIndex];
@@ -129,20 +131,80 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               Context
             </Typography>
           </Box>
-          <TextField
-            multiline
-            fullWidth
-            variant="standard"
-            value={currentQA.context}
-            onChange={(e) => onUpdateQA({ ...currentQA, context: e.target.value })}
-            InputProps={{
-              disableUnderline: true,
-              sx: {
-                ...contextTextStyles,
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-              }
-            }}
-          />
+          {chunkingAlgorithm === 'line-with-header' ? (
+            <Box sx={{
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              fontSize: '0.9rem',
+              lineHeight: 1.6,
+              mt: 1
+            }}>
+              {currentQA.context.split('\n').map((line, index) => (
+                <Box 
+                  key={index}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gap: 2,
+                    p: 1,
+                    borderBottom: index === 0 ? `2px solid ${theme.palette.divider}` : `1px solid ${theme.palette.divider}`,
+                    bgcolor: index === 0 ? alpha(theme.palette.primary.main, 0.04) : 'transparent',
+                  }}
+                >
+                  {line.split(/[,\t]/).map((cell, cellIndex) => (
+                    <TextField
+                      key={cellIndex}
+                      value={cell.trim()}
+                      onChange={(e) => {
+                        const lines = currentQA.context.split('\n');
+                        const cells = lines[index].split(/[,\t]/);
+                        cells[cellIndex] = e.target.value;
+                        lines[index] = cells.join(',');
+                        onUpdateQA({
+                          ...currentQA,
+                          context: lines.join('\n')
+                        });
+                      }}
+                      variant="standard"
+                      multiline
+                      fullWidth
+                      InputProps={{
+                        disableUnderline: true,
+                        sx: {
+                          fontSize: '0.9rem',
+                          fontFamily: 'inherit',
+                          padding: '4px 8px',
+                          '& textarea': {
+                            overflow: 'hidden',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word'
+                          },
+                          '&:hover': {
+                            bgcolor: alpha(theme.palette.primary.main, 0.04)
+                          },
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                  ))}
+                </Box>
+              ))}
+            </Box>
+          ) : (
+            <TextField
+              multiline
+              fullWidth
+              variant="standard"
+              value={currentQA.context}
+              onChange={(e) => onUpdateQA({ ...currentQA, context: e.target.value })}
+              InputProps={{
+                disableUnderline: true,
+                sx: {
+                  ...contextTextStyles,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                }
+              }}
+            />
+          )}
         </Paper>
 
         {/* Question Section */}
