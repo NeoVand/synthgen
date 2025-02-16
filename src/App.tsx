@@ -49,10 +49,13 @@ import { debounce } from 'lodash'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import ErrorIcon from '@mui/icons-material/Error';
 
 // PDFJS
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-GlobalWorkerOptions.workerSrc = '/node_modules/pdfjs-dist/build/pdf.worker.mjs'
+import * as PDFJS from 'pdfjs-dist'
+const { getDocument, GlobalWorkerOptions } = PDFJS;
+// Update worker path to use the correct path in both dev and prod
+GlobalWorkerOptions.workerSrc = `${import.meta.env.BASE_URL}pdf.worker.mjs`
 // DOCX
 import { renderAsync } from 'docx-preview'
 
@@ -154,7 +157,48 @@ const GLASS_EFFECT_DARK = {
 // Add type for chunking algorithms
 type ChunkingAlgorithm = 'recursive' | 'line' | 'line-with-header';
 
+// Add these new types and constants
+interface OllamaError {
+  message: string;
+  isOllamaError: boolean;
+}
+
+const OLLAMA_BASE_URL = 'http://localhost:11434';
+
+// Add a helper function to check Ollama connection
+const checkOllamaConnection = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+};
+
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
+  // Add error state
+  const [ollamaError, setOllamaError] = useState<OllamaError | null>(null);
+
+  // Add useEffect to check Ollama connection on mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      const isConnected = await checkOllamaConnection();
+      if (!isConnected) {
+        setOllamaError({
+          message: "Cannot connect to Ollama. Please make sure Ollama is running on your machine.",
+          isOllamaError: true
+        });
+      } else {
+        setOllamaError(null);
+      }
+    };
+    
+    checkConnection();
+    const interval = setInterval(checkConnection, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
   // 1. Model Settings
   const [ollamaSettings, setOllamaSettings] = useState<OllamaSettingsType>({
     model: '',
@@ -483,12 +527,18 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         throw new Error('AbortError');
       }
 
+      // Check Ollama connection first
+      const isConnected = await checkOllamaConnection();
+      if (!isConnected) {
+        throw new Error('OllamaConnectionError');
+      }
+
       // Create new AbortController if none exists
       if (!abortControllerRef.current) {
         abortControllerRef.current = new AbortController();
       }
       
-      response = await fetch('http://localhost:11434/api/generate', {
+      response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2310,6 +2360,26 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           </Paper>
         </Box>
       </Box>
+      {ollamaError && (
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            p: 2, 
+            mb: 2, 
+            bgcolor: theme.palette.error.main,
+            color: '#fff',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}
+        >
+          <ErrorIcon />
+          <Typography variant="body2">
+            {ollamaError.message}
+          </Typography>
+        </Paper>
+      )}
     </Box>
   )
 }
