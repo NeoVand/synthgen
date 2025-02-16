@@ -39,6 +39,7 @@ interface OllamaSettingsProps {
   initialSettings?: OllamaSettings;
 }
 
+
 const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApply = false, hideTitle = false, initialSettings }) => {
   const theme = useTheme();
   const [settings, setSettings] = useState<OllamaSettings>(initialSettings || {
