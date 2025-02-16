@@ -176,13 +176,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
   // Summarization
   const [summaryPrompt, setSummaryPrompt] = useState<string>(
-    'Please provide a concise summary of the following content:\n'
+    'Please provide a concise summary of the following content:'
   )
   const [docSummary, setDocSummary] = useState<string>('')
 
   // Q&A prompts
   const [promptQuestion, setPromptQuestion] = useState<string>(
-    "Please read the following text (and summary) and create a single  and short and relevant question related to the text. Don't add any markdown or greetings. Only the question.:\n"
+    "Please read the following text (and summary) and create a single  and short and relevant question related to the text. Don't add any markdown or greetings. Only the question."
   )
   const [promptAnswer, setPromptAnswer] = useState<string>(
     "Based on the text (and summary) plus the question, provide a concise answer. Don't add any markdown or greetings. Only the Answer."
@@ -2027,6 +2027,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       fontSize: '0.8125rem',
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em',
+                      height: '40px', // Match toolbar height
+                      padding: '0 16px', // Adjust padding
+                      whiteSpace: 'nowrap',
+                    },
+                    '& .MuiTableHead-root .MuiTableCell-root:first-of-type': {
+                      paddingLeft: '12px', // Adjust checkbox padding
                     },
                     '& .MuiTableBody-root .MuiTableRow-root': {
                       '&:hover': {
@@ -2313,6 +2319,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   isGenerating={isGenerating}
                   onUpdateQA={handleUpdateQA}
                   currentIndex={currentIndex}
+                  chunkingAlgorithm={chunkingAlgorithm}
                 />
               )}
             </Box>
