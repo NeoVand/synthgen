@@ -68,7 +68,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
       setModels(data.models);
       setError(null);
     } catch (err) {
-      setError('Failed to load models. Is Ollama running?');
+      setError('Failed to load models. Please ensure:\n1. Ollama is running on your machine\n2. CORS is enabled by starting Ollama with:\nOLLAMA_ORIGINS=http://localhost:5173,https://yourdomain.com ollama serve');
       console.error('Error fetching models:', err);
     } finally {
       setLoading(false);
