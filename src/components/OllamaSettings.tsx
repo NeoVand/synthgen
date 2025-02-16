@@ -14,11 +14,13 @@ import {
   useTheme,
   alpha,
   Tooltip,
-  IconButton
+  IconButton,
+  Paper
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
 import MemoryIcon from '@mui/icons-material/Memory';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { fetchWithCORS, checkOllamaConnection, getOllamaStartCommand } from '../config/api';
 
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434';
 
@@ -58,24 +60,39 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
 
   // Memoize the fetch models function
   const fetchModels = useCallback(async () => {
     try {
-      const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch models');
+      const { connected, error: connectionError } = await checkOllamaConnection();
+      
+      if (!connected) {
+        throw new Error(connectionError || 'Failed to connect to Ollama');
       }
+
+      const response = await fetchWithCORS('/api/tags');
       const data = await response.json();
+      const models = data.models?.map((m: any) => m.name) || [];
       setModels(data.models);
+      setAvailableModels(models);
       setError(null);
+      
+      if (models.length > 0 && !settings.model) {
+        const newSettings = { ...settings, model: models[0] };
+        setSettings(newSettings);
+        if (autoApply) {
+          onSettingsSave(newSettings);
+        }
+      }
     } catch (err) {
-      setError('Failed to load models. Please ensure:\n1. Ollama is running on your machine\n2. Start Ollama with CORS enabled:\nOLLAMA_ORIGINS=* ollama serve\n3. Ollama is accessible at: ' + OLLAMA_BASE_URL);
-      console.error('Error fetching models:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Error fetching models:', errorMessage);
+      setError(`Cannot connect to Ollama. ${getOllamaStartCommand()}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [settings, autoApply, onSettingsSave]);
 
   // Fetch models on mount only
   useEffect(() => {
@@ -97,10 +114,66 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
   }, [settings, autoApply, onSettingsSave, initialSettings]);
 
   // Memoize the filtered models
-  const availableModels = useMemo(() => models || [], [models]);
+  const availableModelsMemo = useMemo(() => models || [], [models]);
+
+  const handleSettingChange = (field: keyof OllamaSettings, value: any) => {
+    const newSettings = { ...settings, [field]: value };
+    setSettings(newSettings);
+    if (autoApply) {
+      onSettingsSave(newSettings);
+    }
+  };
 
   return (
     <Box>
+      {error && (
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            p: 2, 
+            mb: 2, 
+            bgcolor: 'error.main',
+            color: '#fff',
+            borderRadius: '8px',
+          }}
+        >
+          <Typography variant="body2">
+            {error}
+          </Typography>
+          
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="body2">
+              To enable CORS, start Ollama with:
+            </Typography>
+            <Box sx={{ 
+              bgcolor: 'rgba(0,0,0,0.2)', 
+              p: 1,
+              borderRadius: '4px',
+              mt: 1,
+              fontFamily: 'monospace'
+            }}>
+              {window.location.hostname === 'localhost' 
+                ? 'ollama serve'
+                : `OLLAMA_ORIGINS=${window.location.origin} ollama serve`}
+            </Box>
+          </Box>
+
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              For the deployed version, you also need to:
+            </Typography>
+            <Box component="ul" sx={{ 
+              mt: 0.5, 
+              mb: 0, 
+              pl: 2.5
+            }}>
+              <li>Chrome/Edge: Enable "Insecure origins treated as secure" in chrome://flags/</li>
+              <li>Firefox: Set "security.fileuri.strict_origin_policy" to false in about:config</li>
+            </Box>
+          </Box>
+        </Paper>
+      )}
+
       {!hideTitle && (
         <Box sx={{ 
           display: 'flex', 
@@ -160,7 +233,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
         </Box>
         <Select
           value={settings.model || ''}
-          onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))}
+          onChange={(e) => handleSettingChange('model', e.target.value)}
           startAdornment={
             <MemoryIcon sx={{ 
               ml: 1, 
@@ -204,8 +277,8 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
           ) : (
             availableModels.map((model) => (
               <MenuItem 
-                key={model.name} 
-                value={model.name}
+                key={model} 
+                value={model}
                 sx={{
                   borderRadius: '6px',
                   mx: 0.5,
@@ -214,7 +287,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
                   }
                 }}
               >
-                {model.name}
+                {model}
               </MenuItem>
             ))
           )}
@@ -252,7 +325,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
         </Box>
         <Slider
           value={settings.temperature}
-          onChange={(_, value) => setSettings(prev => ({ ...prev, temperature: value as number }))}
+          onChange={(_, value) => handleSettingChange('temperature', value as number)}
           min={0}
           max={2}
           step={0.1}
@@ -306,7 +379,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
         </Box>
         <Slider
           value={settings.topP}
-          onChange={(_, value) => setSettings(prev => ({ ...prev, topP: value as number }))}
+          onChange={(_, value) => handleSettingChange('topP', value as number)}
           min={0}
           max={1}
           step={0.1}
@@ -334,7 +407,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
           control={
             <Checkbox
               checked={settings.useFixedSeed}
-              onChange={(e) => setSettings(prev => ({ ...prev, useFixedSeed: e.target.checked }))}
+              onChange={(e) => handleSettingChange('useFixedSeed', e.target.checked)}
               sx={{
                 '&.Mui-checked': {
                   color: theme.palette.primary.main,
@@ -375,7 +448,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
             type="number"
             fullWidth
             value={settings.seed}
-            onChange={(e) => setSettings(prev => ({ ...prev, seed: Number(e.target.value) }))}
+            onChange={(e) => handleSettingChange('seed', Number(e.target.value))}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: '8px',
@@ -402,7 +475,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
           type="number"
           fullWidth
           value={settings.numCtx}
-          onChange={(e) => setSettings(prev => ({ ...prev, numCtx: Number(e.target.value) }))}
+          onChange={(e) => handleSettingChange('numCtx', Number(e.target.value))}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: '8px',
