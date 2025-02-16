@@ -1570,7 +1570,30 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                   '& .MuiInputBase-root': {
                                     borderRadius: '8px',
                                     fontSize: '0.875rem',
-                                    lineHeight: 1.6
+                                    lineHeight: 1.6,
+                                    '& textarea': {
+                                      paddingRight: '16px',
+                                      '&::-webkit-scrollbar': {
+                                        width: '8px',
+                                        height: '8px'
+                                      },
+                                      '&::-webkit-scrollbar-track': {
+                                        background: 'transparent'
+                                      },
+                                      '&::-webkit-scrollbar-thumb': {
+                                        background: theme.palette.mode === 'dark' 
+                                          ? 'rgba(255, 255, 255, 0.1)' 
+                                          : 'rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '100px',
+                                        border: '2px solid transparent',
+                                        backgroundClip: 'padding-box',
+                                        '&:hover': {
+                                          background: theme.palette.mode === 'dark' 
+                                            ? 'rgba(255, 255, 255, 0.2)' 
+                                            : 'rgba(0, 0, 0, 0.2)',
+                                        }
+                                      }
+                                    }
                                   }
                                 }}
                               />
