@@ -22,7 +22,6 @@ import MemoryIcon from '@mui/icons-material/Memory';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { fetchWithCORS, checkOllamaConnection, getOllamaStartCommand } from '../config/api';
 
-const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434';
 
 interface OllamaSettings {
   model: string;
@@ -113,8 +112,6 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
     }
   }, [settings, autoApply, onSettingsSave, initialSettings]);
 
-  // Memoize the filtered models
-  const availableModelsMemo = useMemo(() => models || [], [models]);
 
   const handleSettingChange = (field: keyof OllamaSettings, value: any) => {
     const newSettings = { ...settings, [field]: value };
