@@ -26,9 +26,19 @@ SynthGen is a user-friendly desktop application that helps you generate high-qua
 
 ## Prerequisites
 
-- [Ollama](https://ollama.ai/) installed and running locally
-- A compatible LLM model pulled in Ollama (e.g., mistral, llama2, etc.)
-- Node.js 18+ and npm/yarn installed
+1. Install [Ollama](https://ollama.ai) on your local machine
+2. Start Ollama with CORS enabled:
+   ```bash
+   # For local development
+   ollama serve
+
+   # For accessing the deployed version
+   OLLAMA_ORIGINS=https://neovand.github.io ollama serve
+   ```
+
+3. If accessing the deployed version, configure your browser:
+   - Chrome/Edge: Enable "Insecure origins treated as secure" in chrome://flags/
+   - Firefox: Set "security.fileuri.strict_origin_policy" to false in about:config
 
 ## Installation
 
@@ -167,3 +177,7 @@ The built files will be in the `dist` directory.
 ## License
 
 MIT
+
+## How it Works
+
+This application runs entirely in your browser and requires a local Ollama installation. No data is sent to any external servers - all AI processing happens on your machine.

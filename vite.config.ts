@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 
 export default defineConfig({
+  base: '/synthgen/',
   plugins: [
     react(),
     {
@@ -48,9 +49,11 @@ export default defineConfig({
         manualChunks: {
           pdfjs: ['pdfjs-dist']
         },
-        assetFileNames: 'assets/[name].[ext]',
-        chunkFileNames: 'assets/[name].js',
-        entryFileNames: 'assets/[name].js'
+        assetFileNames: (assetInfo) => {
+          return `assets/${assetInfo.name}`;
+        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js'
       }
     },
     copyPublicDir: true
@@ -61,6 +64,13 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
-    open: true
+    open: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:11434',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
   }
 })
