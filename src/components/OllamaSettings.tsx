@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Typography,
   FormControl,
@@ -39,13 +39,6 @@ interface OllamaSettingsProps {
   initialSettings?: OllamaSettings;
 }
 
-interface OllamaModel {
-  name: string;
-  modified_at: string;
-  size: number;
-  digest: string;
-}
-
 const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApply = false, hideTitle = false, initialSettings }) => {
   const theme = useTheme();
   const [settings, setSettings] = useState<OllamaSettings>(initialSettings || {
@@ -56,7 +49,6 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
     seed: 42,
     numCtx: 2048,
   });
-  const [models, setModels] = useState<OllamaModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -73,7 +65,6 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
       const response = await fetchWithCORS('/api/tags');
       const data = await response.json();
       const models = data.models?.map((m: any) => m.name) || [];
-      setModels(data.models);
       setAvailableModels(models);
       setError(null);
       
