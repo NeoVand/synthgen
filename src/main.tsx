@@ -12,6 +12,7 @@ function ThemeWrapper() {
   const theme = useMemo(
     () =>
       createTheme({
+        
         typography: {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
           h6: {
