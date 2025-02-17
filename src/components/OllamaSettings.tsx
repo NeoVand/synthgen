@@ -15,7 +15,6 @@ import {
   alpha,
   Tooltip,
   IconButton,
-  Paper
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
 import MemoryIcon from '@mui/icons-material/Memory';
