@@ -27,7 +27,7 @@ interface FlashcardViewProps {
   qaPairs: QAPair[];
   onUpdateQA: (updatedQA: QAPair) => void;
   currentIndex: number;
-  chunkingAlgorithm: 'recursive' | 'line' | 'line-with-header';
+  chunkingAlgorithm: 'recursive' | 'line' | 'csv-tsv';
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({
@@ -129,37 +129,61 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               Context
             </Typography>
           </Box>
-          {chunkingAlgorithm === 'line-with-header' ? (
+          {chunkingAlgorithm === 'csv-tsv' ? (
             <Box sx={{
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
               fontSize: '0.9rem',
               lineHeight: 1.6,
               mt: 1
             }}>
-              {currentQA.context.split('\n').map((line, index) => (
-                <Box 
-                  key={index}
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                    gap: 2,
-                    p: 1,
-                    borderBottom: index === 0 ? `2px solid ${theme.palette.divider}` : `1px solid ${theme.palette.divider}`,
-                    bgcolor: index === 0 ? alpha(theme.palette.primary.main, 0.04) : 'transparent',
-                  }}
-                >
-                  {line.split(/[,\t]/).map((cell, cellIndex) => (
+              {(() => {
+                // Parse the context into key-value pairs
+                const pairs = currentQA.context.split('\n').map(line => {
+                  const colonIndex = line.indexOf(':');
+                  if (colonIndex === -1) return null;
+                  return {
+                    key: line.substring(0, colonIndex).trim(),
+                    value: line.substring(colonIndex + 1).trim()
+                  };
+                }).filter(Boolean) as { key: string; value: string }[];
+
+                return pairs.map(({ key, value }, index) => (
+                  <Box 
+                    key={index}
+                    sx={{
+                      display: 'flex',
+                      gap: 2,
+                      p: 1,
+                      borderBottom: `1px solid ${theme.palette.divider}`,
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.04)
+                      },
+                    }}
+                  >
+                    <Box sx={{
+                      minWidth: '150px',
+                      maxWidth: '200px',
+                      fontWeight: 600,
+                      color: theme.palette.primary.main,
+                      opacity: 0.8,
+                      flexShrink: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {key}
+                    </Box>
                     <TextField
-                      key={cellIndex}
-                      value={cell.trim()}
+                      value={value}
                       onChange={(e) => {
-                        const lines = currentQA.context.split('\n');
-                        const cells = lines[index].split(/[,\t]/);
-                        cells[cellIndex] = e.target.value;
-                        lines[index] = cells.join(',');
+                        const newPairs = [...pairs];
+                        newPairs[index] = { key, value: e.target.value };
+                        const newContext = newPairs
+                          .map(p => `${p.key}: ${p.value}`)
+                          .join('\n');
                         onUpdateQA({
                           ...currentQA,
-                          context: lines.join('\n')
+                          context: newContext
                         });
                       }}
                       variant="standard"
@@ -172,20 +196,18 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                           fontFamily: 'inherit',
                           padding: '4px 8px',
                           '& textarea': {
-                            overflow: 'hidden',
+                            overflow: 'auto',
                             whiteSpace: 'pre-wrap',
                             wordWrap: 'break-word'
                           },
-                          '&:hover': {
-                            bgcolor: alpha(theme.palette.primary.main, 0.04)
-                          },
-                          borderRadius: 1
+                          borderRadius: 1,
+                          minHeight: '24px'
                         }
                       }}
                     />
-                  ))}
-                </Box>
-              ))}
+                  </Box>
+                ));
+              })()}
             </Box>
           ) : (
             <TextField

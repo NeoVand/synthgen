@@ -155,7 +155,7 @@ const GLASS_EFFECT_DARK = {
 };
 
 // Add type for chunking algorithms
-type ChunkingAlgorithm = 'recursive' | 'line' | 'line-with-header';
+type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv';
 
 // Add these new types and constants
 interface OllamaError {
@@ -473,17 +473,96 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           chunks = rawText.split('\n').filter(line => line.trim())
           break;
 
-        case 'line-with-header':
-          const lines = rawText.split('\n').filter(line => line.trim());
-          if (lines.length === 0) break;
-          
-          // First line is the header
-          const header = lines[0];
-          // Rest are content lines
-          const contentLines = lines.slice(1);
-          
-          // For each content line, combine with header
-          chunks = contentLines.map(line => `${header}\n${line}`);
+        case 'csv-tsv':
+          try {
+            // First determine if it's TSV by checking for tabs
+            const delimiter = rawText.includes('\t') ? '\t' : ',';
+            
+            // Function to parse CSV/TSV properly handling quotes and escapes
+            const parseCSV = (text: string): string[][] => {
+              const rows: string[][] = [];
+              let currentRow: string[] = [];
+              let currentField = '';
+              let insideQuotes = false;
+              
+              for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+                
+                if (char === '"') {
+                  if (insideQuotes && nextChar === '"') {
+                    // Handle escaped quote
+                    currentField += '"';
+                    i++; // Skip next quote
+                  } else {
+                    // Toggle quote state
+                    insideQuotes = !insideQuotes;
+                  }
+                } else if (char === delimiter && !insideQuotes) {
+                  // End of field - clean up any newlines in the field
+                  currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+                  currentField = '';
+                } else if (char === '\n' && !insideQuotes) {
+                  // End of row - clean up any newlines in the last field
+                  currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+                  if (currentRow.some(field => field.length > 0)) {
+                    rows.push(currentRow);
+                  }
+                  currentRow = [];
+                  currentField = '';
+                } else if (char === '\r') {
+                  // Ignore carriage returns
+                  continue;
+                } else {
+                  // If we're inside quotes and hit a newline, replace with space
+                  if (insideQuotes && (char === '\n' || char === '\r')) {
+                    currentField += ' ';
+                  } else {
+                    currentField += char;
+                  }
+                }
+              }
+              
+              // Handle last field and row
+              if (currentField || currentRow.length > 0) {
+                currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+                if (currentRow.some(field => field.length > 0)) {
+                  rows.push(currentRow);
+                }
+              }
+              
+              return rows;
+            };
+
+            // Parse the CSV/TSV content
+            const rows = parseCSV(rawText);
+            
+            if (rows.length < 2) {
+              throw new Error('CSV/TSV must have at least a header row and one data row');
+            }
+
+            // Get headers (first row)
+            const headers = rows[0].map(header => header.trim());
+            
+            // Process each data row into a formatted string
+            chunks = rows.slice(1).map(row => {
+              // Ensure row has same number of columns as header
+              while (row.length < headers.length) row.push('');
+              
+              return headers.map((header, index) => {
+                const value = row[index];
+                // Only include non-empty values
+                return value ? `${header}: ${value}` : null;
+              })
+              .filter(Boolean) // Remove null entries
+              .join('\n');
+            })
+            .filter(chunk => chunk.trim().length > 0); // Remove empty chunks
+          } catch (err) {
+            console.error('Error parsing CSV/TSV:', err);
+            alert('Failed to parse CSV/TSV. Please check the file format.');
+            return;
+          }
           break;
       }
 
@@ -1673,7 +1752,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                   <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                                     Chunking Algorithm
                                   </Typography>
-                                  <Tooltip title="Choose how to split your document into chunks. 'Recursive' splits by character count, 'Line' splits by newlines, and 'Line+Header' treats the first line as a header and includes it with each chunk." placement="right">
+                                  <Tooltip title="Choose how to split your document into chunks. 'Recursive' splits by character count, 'Line' splits by newlines, and 'CSV/TSV' treats the first line as a header and includes it with each chunk." placement="right">
                                     <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
                                       <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
                                     </IconButton>
@@ -1695,7 +1774,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                               >
                                 <MenuItem value="recursive">Recursive Character Splitter</MenuItem>
                                 <MenuItem value="line">Line by Line</MenuItem>
-                                <MenuItem value="line-with-header">Line + Header</MenuItem>
+                                <MenuItem value="csv-tsv">CSV/TSV Parser</MenuItem>
                               </TextField>
                             </Box>
 
