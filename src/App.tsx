@@ -49,7 +49,6 @@ import { debounce } from 'lodash'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
-import ErrorIcon from '@mui/icons-material/Error';
 
 // PDFJS
 import * as PDFJS from 'pdfjs-dist'
@@ -61,6 +60,7 @@ import { renderAsync } from 'docx-preview'
 
 import OllamaSettings from './components/OllamaSettings'
 import FlashcardView from './components/FlashcardView'
+import OllamaConnectionModal from './components/OllamaConnectionModal'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -176,18 +176,22 @@ const checkOllamaConnection = async (): Promise<boolean> => {
 };
 
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
-  // Add error state
+  // Add state for modal
+  const [showConnectionModal, setShowConnectionModal] = useState<boolean>(false);
   const [ollamaError, setOllamaError] = useState<OllamaError | null>(null);
+  const [isOllamaConnected, setIsOllamaConnected] = useState<boolean>(false);
 
   // Add useEffect to check Ollama connection on mount
   useEffect(() => {
     const checkConnection = async () => {
       const isConnected = await checkOllamaConnection();
+      setIsOllamaConnected(isConnected);
       if (!isConnected) {
         setOllamaError({
           message: "Cannot connect to Ollama. Please make sure Ollama is running on your machine.",
           isOllamaError: true
         });
+        setShowConnectionModal(true);
       } else {
         setOllamaError(null);
       }
@@ -198,6 +202,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     
     return () => clearInterval(interval);
   }, []);
+
+  // Add handler for help button
+  const handleConnectionHelp = () => {
+    setShowConnectionModal(true);
+  };
 
   // 1. Model Settings
   const [ollamaSettings, setOllamaSettings] = useState<OllamaSettingsType>({
@@ -1574,6 +1583,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                               autoApply 
                               hideTitle
                               initialSettings={ollamaSettings}
+                              onHelp={handleConnectionHelp}
                             />
                           </Box>
                         )}
@@ -2462,28 +2472,14 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           </Paper>
         </Box>
       </Box>
-      {ollamaError && (
-        <Paper 
-          elevation={0} 
-          sx={{ 
-            p: 2, 
-            mb: 2, 
-            bgcolor: theme.palette.error.main,
-            color: '#fff',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1
-          }}
-        >
-          <ErrorIcon />
-          <Typography variant="body2">
-            {ollamaError.message}
-          </Typography>
-        </Paper>
-      )}
+      <OllamaConnectionModal
+        open={showConnectionModal}
+        onClose={() => isOllamaConnected && setShowConnectionModal(false)}
+        isConnected={isOllamaConnected}
+        error={ollamaError?.message}
+      />
     </Box>
-  )
-}
+  );
+};
 
 export default App

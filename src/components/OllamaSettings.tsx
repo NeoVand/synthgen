@@ -37,10 +37,11 @@ interface OllamaSettingsProps {
   autoApply?: boolean;
   hideTitle?: boolean;
   initialSettings?: OllamaSettings;
+  onHelp?: () => void;
 }
 
 
-const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApply = false, hideTitle = false, initialSettings }) => {
+const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApply = false, hideTitle = false, initialSettings, onHelp }) => {
   const theme = useTheme();
   const [settings, setSettings] = useState<OllamaSettings>(initialSettings || {
     model: '',
@@ -115,54 +116,6 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
 
   return (
     <Box>
-      {error && (
-        <Paper 
-          elevation={0} 
-          sx={{ 
-            p: 2, 
-            mb: 2, 
-            bgcolor: 'error.main',
-            color: '#fff',
-            borderRadius: '8px',
-          }}
-        >
-          <Typography variant="body2">
-            {error}
-          </Typography>
-          
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="body2">
-              To enable CORS, start Ollama with:
-            </Typography>
-            <Box sx={{ 
-              bgcolor: 'rgba(0,0,0,0.2)', 
-              p: 1,
-              borderRadius: '4px',
-              mt: 1,
-              fontFamily: 'monospace'
-            }}>
-              {window.location.hostname === 'localhost' 
-                ? 'ollama serve'
-                : `OLLAMA_ORIGINS=${window.location.origin} ollama serve`}
-            </Box>
-          </Box>
-
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2">
-              For the deployed version, you also need to:
-            </Typography>
-            <Box component="ul" sx={{ 
-              mt: 0.5, 
-              mb: 0, 
-              pl: 2.5
-            }}>
-              <li>Chrome/Edge: Enable "Insecure origins treated as secure" in chrome://flags/</li>
-              <li>Firefox: Set "security.fileuri.strict_origin_policy" to false in about:config</li>
-            </Box>
-          </Box>
-        </Paper>
-      )}
-
       {!hideTitle && (
         <Box sx={{ 
           display: 'flex', 
@@ -219,6 +172,23 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
               </IconButton>
             </Tooltip>
           </Box>
+          {onHelp && (
+            <Tooltip title="Connection Help" placement="left">
+              <IconButton 
+                size="small" 
+                onClick={onHelp}
+                sx={{ 
+                  color: theme.palette.primary.main,
+                  opacity: 0.8,
+                  '&:hover': {
+                    opacity: 1
+                  }
+                }}
+              >
+                <HelpOutlineIcon sx={{ fontSize: '1rem' }} />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
         <Select
           value={settings.model || ''}
