@@ -51,6 +51,7 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import UploadIcon from '@mui/icons-material/Upload'
+import WarningIcon from '@mui/icons-material/Warning'
 
 // PDFJS
 import * as PDFJS from 'pdfjs-dist'
@@ -431,6 +432,16 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     return text
   }
 
+  // Add this helper function before handleSummarize
+  const estimateTokenCount = (text: string): number => {
+    return Math.floor(text.length / 4);
+  };
+
+  // Add this helper function before handleSummarize
+  const getConcatenatedChunks = () => {
+    return qaPairs.map(qa => qa.context).join('\n\n');
+  };
+
   //------------------------------------------------------------------------------------
   // 3. Summarize
   //------------------------------------------------------------------------------------
@@ -445,8 +456,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       return;
     }
 
-    if (!rawText.trim()) {
-      alert('No document text found. Please upload a file first.')
+    if (qaPairs.length === 0) {
+      alert('No chunks available. Please chunk your document or import Q&A pairs first.')
       return
     }
     if (!ollamaSettings.model) {
@@ -460,7 +471,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
     try {
       let summaryText = '';
-      const prompt = `${summaryPrompt}\n\n${rawText}`;
+      const concatenatedChunks = getConcatenatedChunks();
+      // Use the current value of summaryPrompt from state
+      const prompt = `${summaryPrompt.trim()}\n\nText to summarize:\n${concatenatedChunks}`;
 
       // Create new AbortController for this generation
       abortControllerRef.current = new AbortController();
@@ -2070,7 +2083,14 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 multiline
                                 fullWidth
                                 value={summaryPrompt}
-                                onChange={(e) => setSummaryPrompt(e.target.value)}
+                                onChange={(e) => {
+                                  const newValue = e.target.value;
+                                  setSummaryPrompt(newValue);
+                                }}
+                                onBlur={(e) => {
+                                  // Ensure the value is updated on blur
+                                  setSummaryPrompt(e.target.value.trim());
+                                }}
                                 minRows={2}
                                 maxRows={6}
                                 className="no-drag"
@@ -2083,6 +2103,33 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 }}
                               />
                             </Box>
+                            {qaPairs.length > 0 && (() => {
+                              const concatenatedChunks = getConcatenatedChunks();
+                              const prompt = `${summaryPrompt.trim()}\n\nText to summarize:\n${concatenatedChunks}`;
+                              const estimatedTokens = estimateTokenCount(prompt);
+                              if (estimatedTokens > ollamaSettings.numCtx) {
+                                return (
+                                  <Box sx={{ 
+                                    mb: 2, 
+                                    p: 1.5, 
+                                    borderRadius: 1,
+                                    bgcolor: theme.palette.mode === 'dark' 
+                                      ? alpha(theme.palette.warning.main, 0.1)
+                                      : alpha(theme.palette.warning.main, 0.05),
+                                    border: '1px solid',
+                                    borderColor: theme.palette.mode === 'dark'
+                                      ? alpha(theme.palette.warning.main, 0.2)
+                                      : alpha(theme.palette.warning.main, 0.1),
+                                  }}>
+                                    <Typography variant="body2" color="warning.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <WarningIcon sx={{ fontSize: '1.1rem' }} />
+                                      The prompt and content will likely exceed the context length. Consider increasing the context length to at least {estimatedTokens} tokens or remove unnecessary chunks.
+                                    </Typography>
+                                  </Box>
+                                );
+                              }
+                              return null;
+                            })()}
                             <Button
                               variant="contained"
                               color={isGenerating && generationType === 'summary' ? "error" : "primary"}
@@ -2090,6 +2137,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                               fullWidth
                               sx={{ mt: 1, mb: 2 }}
                               startIcon={isGenerating && generationType === 'summary' ? <StopIcon /> : <AutoAwesomeIcon />}
+                              disabled={qaPairs.length === 0 || !ollamaSettings.model || (isGenerating && generationType !== 'summary')}
                             >
                               {isGenerating && generationType === 'summary' ? "Stop" : "Generate Summary"}
                             </Button>
