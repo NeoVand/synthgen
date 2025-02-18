@@ -64,6 +64,7 @@ import { renderAsync } from 'docx-preview'
 import OllamaSettings from './components/OllamaSettings'
 import FlashcardView from './components/FlashcardView'
 import OllamaConnectionModal from './components/OllamaConnectionModal'
+import PromptTemplates from './components/PromptTemplates'  // Add this import
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -185,6 +186,8 @@ type ViewMode = 'table' | 'flashcard';
 const isTableView = (mode: ViewMode): boolean => mode === 'table';
 const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
 
+// Import the replacePlaceholders helper
+import { replacePlaceholders } from './config/promptTemplates';
 
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // Add state for modal
@@ -790,8 +793,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     );
 
     try {
-      // Generate question
-      const questionPrompt = `${promptQuestion}\n\nSummary:\n${docSummary}\n\nChunk:\n${row.context}`;
+      // Generate question using replacePlaceholders
+      const questionPrompt = replacePlaceholders(promptQuestion, {
+        summary: docSummary,
+        chunk: row.context
+      });
+      
       for await (const chunk of doStreamCall(questionPrompt)) {
         if (shouldStopGeneration) break;
         questionText += chunk;
@@ -835,8 +842,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     );
 
     try {
-      // Generate answer
-      const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${row.context}\nQuestion:\n${row.question}`;
+      // Generate answer using replacePlaceholders
+      const answerPrompt = replacePlaceholders(promptAnswer, {
+        summary: docSummary,
+        chunk: row.context,
+        question: row.question
+      });
+      
       for await (const chunk of doStreamCall(answerPrompt)) {
         if (shouldStopGeneration) break;
         answerText += chunk;
@@ -2205,62 +2217,14 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         )}
                         {section.id === 'section-prompts' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
-                            <Box sx={{ mb: 2 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                  Question Generation Prompt
-                                </Typography>
-                                <Tooltip title="This prompt instructs the AI how to generate questions from the document chunks. The prompt should encourage clear, focused questions." placement="right">
-                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
-                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                              <TextField
-                                multiline
-                                fullWidth
-                                value={promptQuestion}
-                                onChange={(e) => setPromptQuestion(e.target.value)}
-                                minRows={3}
-                                maxRows={8}
-                                className="no-drag"
-                                sx={{
-                                  '& .MuiOutlinedInput-root': {
-                                    borderRadius: '8px',
-                                    fontSize: '0.875rem',
-                                    lineHeight: 1.6
-                                  }
-                                }}
-                              />
-                            </Box>
-                            <Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                  Answer Generation Prompt
-                                </Typography>
-                                <Tooltip title="This prompt instructs the AI how to generate answers to the questions. The prompt should encourage accurate, concise answers based on the document content." placement="right">
-                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
-                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                              <TextField
-                                multiline
-                                fullWidth
-                                value={promptAnswer}
-                                onChange={(e) => setPromptAnswer(e.target.value)}
-                                minRows={3}
-                                maxRows={8}
-                                className="no-drag"
-                                sx={{
-                                  '& .MuiOutlinedInput-root': {
-                                    borderRadius: '8px',
-                                    fontSize: '0.875rem',
-                                    lineHeight: 1.6
-                                  }
-                                }}
-                              />
-                            </Box>
+                            <PromptTemplates
+                              onPromptChange={(questionPrompt, answerPrompt) => {
+                                setPromptQuestion(questionPrompt);
+                                setPromptAnswer(answerPrompt);
+                              }}
+                              initialQuestionPrompt={promptQuestion}
+                              initialAnswerPrompt={promptAnswer}
+                            />
                           </Box>
                         )}
                         {section.id === 'section-chunking' && (
