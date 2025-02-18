@@ -391,7 +391,28 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     const arrayBuffer = await file.arrayBuffer()
     const container = document.createElement('div')
     await renderAsync(arrayBuffer, container, container)
-    return container.innerText || ''
+    
+    // Get the raw text by finding the actual content elements and excluding style elements
+    const contentElements = container.querySelectorAll('article p, article h1, article h2, article h3, article h4, article h5, article h6, article ul, article ol, article li')
+    let text = Array.from(contentElements)
+      .map(el => el.textContent?.trim())
+      .filter(text => text) // Remove empty strings
+      .join('\n\n')
+    
+    // Clean up the text:
+    // 1. Remove any remaining HTML/XML tags
+    text = text.replace(/<[^>]*>/g, '')
+    
+    // 2. Remove multiple consecutive whitespace/newlines
+    text = text.replace(/\s*\n\s*\n\s*/g, '\n\n')
+    
+    // 3. Remove any non-printable characters
+    text = text.replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+    
+    // 4. Trim any leading/trailing whitespace
+    text = text.trim()
+    
+    return text
   }
 
   //------------------------------------------------------------------------------------
