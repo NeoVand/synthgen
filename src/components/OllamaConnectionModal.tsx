@@ -155,7 +155,11 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
                 </IconButton>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                After running this command, restart Ollama for the changes to take effect.
+                1. Run this command in a terminal
+                <br />
+                2. Close all terminal windows running Ollama
+                <br />
+                3. Start Ollama normally with <code>ollama serve</code>
               </Typography>
             </>
           ) : (
@@ -283,19 +287,35 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
           </Typography>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button 
-          onClick={onClose}
-          variant="contained"
-          sx={{
-            borderRadius: 1,
-            textTransform: 'none',
-            px: 3
-          }}
-        >
-          Close
-        </Button>
-      </DialogActions>
+      {isConnected ? (
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button 
+            onClick={onClose}
+            variant="contained"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none',
+              px: 3
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      ) : (
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button 
+            disabled
+            variant="contained"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none',
+              px: 3
+            }}
+          >
+            Please follow the instructions above
+          </Button>
+        </DialogActions>
+      )}
     </Dialog>
   );
 };
