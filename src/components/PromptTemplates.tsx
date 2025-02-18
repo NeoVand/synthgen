@@ -79,13 +79,9 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
       return;
     }
 
-    // If name has changed, update the template with the new name
+    // If name has changed, add the new template while keeping the original
     if (editedTemplate.name !== originalName) {
-      // Remove old template and add new one
-      setTemplates(prev => [
-        ...prev.filter(t => t.name !== originalName),
-        editedTemplate
-      ]);
+      setTemplates(prev => [...prev, editedTemplate]);
     } else {
       // Just update the existing template
       setTemplates(prev => prev.map(t => 
