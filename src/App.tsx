@@ -176,6 +176,14 @@ const checkOllamaConnection = async (): Promise<boolean> => {
   }
 };
 
+// Add this with other type definitions at the top of the file
+type ViewMode = 'table' | 'flashcard';
+
+// Update the isTableView and isFlashcardView functions
+const isTableView = (mode: ViewMode): boolean => mode === 'table';
+const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
+
+
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // Add state for modal
   const [showConnectionModal, setShowConnectionModal] = useState<boolean>(false);
@@ -313,6 +321,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
   // Add this with other state declarations
   const [currentIndex, setCurrentIndex] = useState<number>(0);
+
+  // Update the viewMode state declaration
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
 
   // Add resize handler
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -872,11 +883,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       return;
     }
 
-    if (viewMode === 'flashcard') {
-      const currentQA = qaPairs[currentIndex];
-      if (currentQA) {
-        await generateQuestion(currentQA);
-      }
+    if (isFlashcardView(viewMode)) {
       return;
     }
 
@@ -931,11 +938,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       return;
     }
 
-    if (viewMode === 'flashcard') {
-      const currentQA = qaPairs[currentIndex];
-      if (currentQA) {
-        await generateAnswer(currentQA);
-      }
+    if (isFlashcardView(viewMode)) {
       return;
     }
 
@@ -996,11 +999,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       return;
     }
 
-    if (viewMode === 'flashcard') {
-      const currentQA = qaPairs[currentIndex];
-      if (currentQA) {
-        await generateQA(currentQA);
-      }
+    if (isFlashcardView(viewMode)) {
       return;
     }
 
@@ -1043,7 +1042,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // 6. Delete / Generate
   //------------------------------------------------------------------------------------
   const handleDeleteSelected = () => {
-    if (viewMode === 'flashcard') {
+    if (isFlashcardView(viewMode)) {
       const currentQA = qaPairs[currentIndex];
       if (currentQA) {
         setQaPairs(prev => prev.filter(qa => qa.id !== currentQA.id));
@@ -1251,9 +1250,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }
   }, [isGenerating]);
 
-  // Add this new state for view mode
-  const [viewMode, setViewMode] = useState<'table' | 'flashcard'>('table');
-
   // Effect to handle currentIndex changes
   useEffect(() => {
     if (currentIndex >= qaPairs.length) {
@@ -1261,8 +1257,31 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }
   }, [qaPairs.length, currentIndex]);
 
+  // Effect to handle keyboard navigation for flashcards
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle keyboard navigation if we're in flashcard view and no text field is focused
+      if (isFlashcardView(viewMode) && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'INPUT') {
+        if (event.key === 'ArrowLeft') {
+          if (currentIndex > 0) {
+            setCurrentIndex(prev => prev - 1);
+          }
+        } else if (event.key === 'ArrowRight') {
+          if (currentIndex < qaPairs.length - 1) {
+            setCurrentIndex(prev => prev + 1);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [viewMode, currentIndex, qaPairs.length]);
+
   const handleViewModeToggle = () => {
-    const newMode = viewMode === 'table' ? 'flashcard' : 'table';
+    const newMode = isTableView(viewMode) ? 'flashcard' : 'table';
     
     if (newMode === 'flashcard') {
       const selectedQaPairs = qaPairs.filter(qa => qa.selected);
@@ -1713,11 +1732,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             flexDirection: 'column',
             visibility: isSidebarCollapsed ? 'hidden' : 'visible',
             opacity: isSidebarCollapsed ? 0 : 1,
-            borderRadius: '16px',
-            mx: 3,
-            mt: 3,
-            mb: 3,
             overflow: 'hidden',
+            flexShrink: 0,
           })}
         >
           {/* Sidebar Header */}
@@ -1750,30 +1766,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             >
               Q&A Generator
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'flex-end', p: 1 }}>
-              <Tooltip title={`Switch to ${viewMode === 'table' ? 'flashcard' : 'table'} view`}>
-                <IconButton
-                  onClick={handleViewModeToggle}
-                  size="small"
-                  sx={{ 
-                    color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.main'
-                  }}
-                >
-                  {viewMode === 'table' ? <StyleIcon /> : <ViewColumnIcon />}
-                </IconButton>
-              </Tooltip>
-              <Tooltip title={theme.palette.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-                <IconButton
-                  onClick={onThemeChange} 
-                  size="small"
-                  sx={{ 
-                    color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.main'
-                  }}
-                >
-                  {theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-                </IconButton>
-              </Tooltip>
-            </Box>
           </Box>
 
           {/* Sidebar Content */}
@@ -2304,16 +2296,15 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         {/* Main Content */}
         <Box sx={{ 
           flex: 1, 
-          overflow: 'hidden', 
-          p: 3,
+          overflow: 'hidden',
           bgcolor: 'transparent',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}>
           <Paper sx={(theme) => ({ 
             height: '100%', 
             display: 'flex', 
             flexDirection: 'column',
             ...(theme.palette.mode === 'light' ? GLASS_EFFECT_LIGHT : GLASS_EFFECT_DARK),
-            borderRadius: '16px',
             overflow: 'hidden',
           })}>
             <Box sx={(theme) => ({ 
@@ -2334,49 +2325,75 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               }}>
                 {/* Left section */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <IconButton
-                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                  <Button
                     size="small"
-                    sx={{ 
-                      color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.main',
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    startIcon={isSidebarCollapsed ? <LastPageIcon /> : <FirstPageIcon />}
+                    variant="text"
+                    disableElevation
+                    sx={{
+                      height: 32,
+                      minWidth: 32,
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                      borderRadius: 1,
+                      px: 1,
+                      color: theme.palette.mode === 'dark' 
+                        ? theme.palette.grey[300]
+                        : theme.palette.grey[700],
+                    }}
+                  />
+
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disableElevation
+                    onClick={handleViewModeToggle}
+                    startIcon={isTableView(viewMode) ? <StyleIcon /> : <ViewColumnIcon />}
+                    sx={{
+                      height: 32,
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                      borderRadius: 1,
+                      bgcolor: theme.palette.mode === 'dark' 
+                        ? '#B7940080'  // Brighter yellow with transparency
+                        : '#FFD700CC',  // Gold color with slight transparency
                       '&:hover': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.08),
+                        bgcolor: theme.palette.mode === 'dark' 
+                          ? '#B79400'   // Solid brighter yellow
+                          : '#FFD700',   // Solid gold
                       },
+                      color: theme.palette.mode === 'dark' 
+                        ? theme.palette.common.white
+                        : '#000000',
                     }}
                   >
-                    {isSidebarCollapsed ? <LastPageIcon /> : <FirstPageIcon />}
-                  </IconButton>
+                    {isTableView(viewMode) ? 'Cards' : 'Table'}
+                  </Button>
 
-                  {/* Main action buttons */}
+                  {/* Generation actions group */}
                   <Box sx={{ 
                     display: 'flex', 
-                    gap: 1,
-                    bgcolor: theme.palette.mode === 'dark' 
-                      ? alpha(theme.palette.background.paper, 0.3)
-                      : alpha(theme.palette.background.paper, 0.5),
+                    gap: 1, 
+                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
                     p: 0.5,
-                    borderRadius: 1.5,
-                    border: '1px solid',
-                    borderColor: theme.palette.mode === 'dark' 
-                      ? alpha(theme.palette.common.white, 0.1)
-                      : alpha(theme.palette.common.black, 0.1),
+                    borderRadius: 1
                   }}>
-                    {/* Generate Q&A Button */}
                     <Button
                       variant="contained"
                       color="primary"
                       disableElevation
                       startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
-                      onClick={viewMode === 'flashcard' ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerateQA}
+                      onClick={isFlashcardView(viewMode) ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerateQA}
                       disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'qa')}
                       sx={{
-                        minWidth: '120px',
                         height: 32,
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
                         borderRadius: 1,
-                        px: 2,
                         bgcolor: isGenerating && generationType === 'qa' 
                           ? theme.palette.error.main 
                           : theme.palette.primary.main,
@@ -2389,27 +2406,24 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     >
                       {isGenerating && generationType === 'qa' 
                         ? `Stop (${generationProgress.completed}/${generationProgress.total})`
-                        : 'Generate Q&A'}
+                        : 'Q&A'}
                     </Button>
 
-                    {/* Generate Question Button */}
                     <Button
                       variant="contained"
                       color="secondary"
                       disableElevation
                       startIcon={isGenerating && generationType === 'question' ? <StopIcon /> : <HelpOutlineIcon />}
-                      onClick={viewMode === 'flashcard' 
+                      onClick={isFlashcardView(viewMode) 
                         ? () => handleSingleCardGenerateQuestion(qaPairs[currentIndex].id) 
                         : handleGenerateQuestion}
                       disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'question')}
                       sx={{
-                        minWidth: '120px',
                         height: 32,
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
                         borderRadius: 1,
-                        px: 2,
                         bgcolor: isGenerating && generationType === 'question'
                           ? theme.palette.error.main
                           : theme.palette.secondary.main,
@@ -2422,27 +2436,24 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     >
                       {isGenerating && generationType === 'question' 
                         ? `Stop (${generationProgress.completed}/${generationProgress.total})`
-                        : 'Generate Question'}
+                        : 'Question'}
                     </Button>
 
-                    {/* Generate Answer Button */}
                     <Button
                       variant="contained"
                       color="success"
                       disableElevation
                       startIcon={isGenerating && generationType === 'answer' ? <StopIcon /> : <LightbulbOutlinedIcon />}
-                      onClick={viewMode === 'flashcard' 
+                      onClick={isFlashcardView(viewMode) 
                         ? () => handleSingleCardGenerateAnswer(qaPairs[currentIndex].id) 
                         : handleGenerateAnswer}
                       disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'answer')}
                       sx={{
-                        minWidth: '120px',
                         height: 32,
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
                         borderRadius: 1,
-                        px: 2,
                         bgcolor: isGenerating && generationType === 'answer'
                           ? theme.palette.error.main
                           : theme.palette.success.main,
@@ -2455,119 +2466,148 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     >
                       {isGenerating && generationType === 'answer' 
                         ? `Stop (${generationProgress.completed}/${generationProgress.total})`
-                        : 'Generate Answer'}
+                        : 'Answer'}
                     </Button>
                   </Box>
 
-                  {/* Secondary actions */}
+                  {/* Row editing actions group */}
                   <Box sx={{ 
-                    display: 'flex',
+                    display: 'flex', 
                     gap: 1,
-                    bgcolor: theme.palette.mode === 'dark' 
-                      ? alpha(theme.palette.background.paper, 0.3)
-                      : alpha(theme.palette.background.paper, 0.5),
+                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
                     p: 0.5,
-                    borderRadius: 1.5,
-                    border: '1px solid',
-                    borderColor: theme.palette.mode === 'dark' 
-                      ? alpha(theme.palette.common.white, 0.1)
-                      : alpha(theme.palette.common.black, 0.1),
+                    borderRadius: 1
                   }}>
-                    <Tooltip title="Add empty card">
-                      <IconButton
-                        size="small"
-                        onClick={handleAddEmpty}
-                        sx={{
-                          color: theme.palette.primary.main,
-                          '&:hover': {
-                            bgcolor: alpha(theme.palette.primary.main, 0.08),
-                          }
-                        }}
-                      >
-                        <AddIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disableElevation
+                      onClick={handleAddEmpty}
+                      startIcon={<AddIcon />}
+                      sx={{
+                        height: 32,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        borderRadius: 1,
+                        bgcolor: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.info.main, 0.5)
+                          : alpha(theme.palette.info.main, 0.2),
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? alpha(theme.palette.info.main, 0.7)
+                            : alpha(theme.palette.info.main, 0.3),
+                        },
+                        color: theme.palette.mode === 'dark'
+                          ? theme.palette.common.white
+                          : theme.palette.common.black,
+                        '& .MuiSvgIcon-root': {
+                          color: 'inherit'
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
 
-                    <Tooltip title={viewMode === 'table' ? "Duplicate selected" : "Duplicate current card"}>
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={handleDuplicate}
-                          disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
-                          sx={{
-                            color: theme.palette.info.main,
-                            '&:hover': {
-                              bgcolor: alpha(theme.palette.info.main, 0.08),
-                            },
-                            '&.Mui-disabled': {
-                              color: theme.palette.mode === 'dark' 
-                                ? 'rgba(255, 255, 255, 0.3)' 
-                                : 'rgba(0, 0, 0, 0.26)'
-                            }
-                          }}
-                        >
-                          <ContentCopyIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disableElevation
+                      onClick={handleDuplicate}
+                      disabled={isTableView(viewMode) ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
+                      startIcon={<ContentCopyIcon />}
+                      sx={{
+                        height: 32,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        borderRadius: 1,
+                        bgcolor: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.warning.main, 0.5)
+                          : alpha(theme.palette.warning.main, 0.2),
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? alpha(theme.palette.warning.main, 0.7)
+                            : alpha(theme.palette.warning.main, 0.3),
+                        },
+                        color: theme.palette.mode === 'dark'
+                          ? theme.palette.common.white
+                          : theme.palette.common.black,
+                        '& .MuiSvgIcon-root': {
+                          color: 'inherit'
+                        }
+                      }}
+                    >
+                      Duplicate
+                    </Button>
 
-                    <Tooltip title="Delete selected">
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={handleDeleteSelected}
-                          disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
-                          sx={{
-                            color: theme.palette.error.main,
-                            '&:hover': {
-                              bgcolor: alpha(theme.palette.error.main, 0.08),
-                            },
-                            '&.Mui-disabled': {
-                              color: theme.palette.mode === 'dark' 
-                                ? 'rgba(255, 255, 255, 0.3)' 
-                                : 'rgba(0, 0, 0, 0.26)'
-                            }
-                          }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disableElevation
+                      color="error"
+                      onClick={handleDeleteSelected}
+                      disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
+                      startIcon={<DeleteIcon />}
+                      sx={{
+                        height: 32,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        borderRadius: 1,
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </Box>
                 </Box>
 
                 {/* Right section */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  {viewMode === 'table' ? (
-                    <Tooltip title="Export to CSV">
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={handleExportCSV}
-                          disabled={qaPairs.length === 0}
-                          sx={{
-                            color: theme.palette.primary.main,
-                            '&:hover': {
-                              bgcolor: alpha(theme.palette.primary.main, 0.08),
-                            },
-                            '&.Mui-disabled': {
-                              color: theme.palette.mode === 'dark' 
-                                ? 'rgba(255, 255, 255, 0.3)' 
-                                : 'rgba(0, 0, 0, 0.26)'
-                            }
-                          }}
-                        >
-                          <SaveAltIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  ) : (
-                    <CardNavigation 
-                      currentIndex={currentIndex}
-                      totalCards={qaPairs.length}
-                      onCardChange={handleCardChange}
-                    />
-                  )}
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disableElevation
+                    onClick={handleExportCSV}
+                    disabled={qaPairs.length === 0}
+                    startIcon={<SaveAltIcon />}
+                    sx={{
+                      height: 32,
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                      borderRadius: 1,
+                      bgcolor: theme.palette.mode === 'dark' 
+                        ? alpha(theme.palette.grey[300], 0.2)
+                        : alpha(theme.palette.grey[400], 0.4),
+                      color: theme.palette.mode === 'dark' 
+                        ? theme.palette.common.white
+                        : theme.palette.common.black,
+                      '&:hover': {
+                        bgcolor: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.grey[300], 0.3)
+                          : alpha(theme.palette.grey[400], 0.6),
+                      }
+                    }}
+                  >
+                    Export
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disableElevation
+                    onClick={onThemeChange}
+                    startIcon={theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                    sx={{
+                      height: 32,
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                      borderRadius: 1,
+                    }}
+                  >
+                    {theme.palette.mode === 'dark' ? 'Day' : 'Night'}
+                  </Button>
                 </Box>
               </Box>
             </Box>
@@ -2579,7 +2619,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               overflow: 'hidden',
               minHeight: 0 // This is important for flex child scrolling
             }}>
-              {viewMode === 'table' ? (
+              {isTableView(viewMode) ? (
                 <TableContainer sx={{ 
                   height: '100%',
                   overflow: 'auto',
@@ -2628,8 +2668,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       padding: '0 16px', // Adjust padding
                       whiteSpace: 'nowrap',
                     },
-                    '& .MuiTableHead-root .MuiTableCell-root:first-of-type': {
-                      paddingLeft: '12px', // Adjust checkbox padding
+                    '& .MuiTableHead-root .MuiTableCell-root:first-of-type, & .MuiTableBody-root .MuiTableCell-root:first-of-type': {
+                      width: '48px',
+                      padding: '0 8px', // Consistent padding for checkbox cells
                     },
                     '& .MuiTableBody-root .MuiTableRow-root': {
                       '&:hover': {
@@ -2639,10 +2680,23 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       },
                     },
                     '& .MuiCheckbox-root': {
-                      padding: '4px',
+                      padding: '8px', // Consistent padding for all checkboxes
                       borderRadius: '6px',
+                      color: theme.palette.mode === 'dark' 
+                        ? alpha(theme.palette.common.white, 0.3)
+                        : alpha(theme.palette.common.black, 0.2),
+                      '& .MuiSvgIcon-root': {
+                        fontSize: '1.1rem',
+                        borderRadius: '2px',
+                      },
                       '&:hover': {
                         backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                        color: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.common.white, 0.4)
+                          : alpha(theme.palette.common.black, 0.3),
+                      },
+                      '&.Mui-checked, &.MuiCheckbox-indeterminate': {
+                        color: `${theme.palette.primary.main} !important`,
                       },
                     },
                   }}>
@@ -2886,12 +2940,29 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   />
                 </TableContainer>
               ) : (
-                <FlashcardView
-                  qaPairs={qaPairs}
-                  onUpdateQA={handleUpdateQA}
-                  currentIndex={currentIndex}
-                  chunkingAlgorithm={chunkingAlgorithm}
-                />
+                <>
+                  {/* Add navigation controls above the flashcard view */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center',
+                    py: 2,
+                    borderBottom: 1,
+                    borderColor: theme.palette.divider,
+                  }}>
+                    <CardNavigation 
+                      currentIndex={currentIndex}
+                      totalCards={qaPairs.length}
+                      onCardChange={handleCardChange}
+                    />
+                  </Box>
+                  <FlashcardView
+                    qaPairs={qaPairs}
+                    onUpdateQA={handleUpdateQA}
+                    currentIndex={currentIndex}
+                    chunkingAlgorithm={chunkingAlgorithm}
+                  />
+                </>
               )}
             </Box>
           </Paper>
