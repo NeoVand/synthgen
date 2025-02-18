@@ -172,21 +172,28 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
             </Tooltip>
           </Box>
           {onHelp && (
-            <Tooltip title="Connection Help" placement="left">
-              <IconButton 
-                size="small" 
-                onClick={onHelp}
-                sx={{ 
-                  color: theme.palette.primary.main,
-                  opacity: 0.8,
-                  '&:hover': {
-                    opacity: 1
-                  }
-                }}
-              >
-                <HelpOutlineIcon sx={{ fontSize: '1rem' }} />
-              </IconButton>
-            </Tooltip>
+            <Button
+              size="small"
+              onClick={onHelp}
+              variant="outlined"
+              sx={{ 
+                minWidth: 0,
+                px: 2,
+                py: 0.5,
+                textTransform: 'none',
+                borderRadius: '6px',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                color: theme.palette.primary.main,
+                borderColor: alpha(theme.palette.primary.main, 0.5),
+                '&:hover': {
+                  borderColor: theme.palette.primary.main,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.04)
+                }
+              }}
+            >
+              Help
+            </Button>
           )}
         </Box>
         <Select
