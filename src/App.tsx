@@ -1738,11 +1738,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         >
           {/* Sidebar Header */}
           <Box sx={(theme) => ({ 
-            p: 1.5,
+            p: 1,  // Reduced from 1.5
             display: 'flex', 
             alignItems: 'center',
             justifyContent: 'space-between',
-            height: 64,
+            height: 40,  // Reduced from 48 to match toolbar
             borderBottom: 1, 
             borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)',
             bgcolor: theme.palette.mode === 'dark'
@@ -2320,87 +2320,98 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                 display: 'flex', 
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                height: 40,
+                height: 28,  // Reduced from 40
                 gap: 2
               }}>
                 {/* Left section */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Button
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <IconButton
                     size="small"
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                    startIcon={isSidebarCollapsed ? <LastPageIcon /> : <FirstPageIcon />}
-                    variant="text"
-                    disableElevation
                     sx={{
-                      height: 32,
-                      minWidth: 32,
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
-                      borderRadius: 1,
-                      px: 1,
-                      color: theme.palette.mode === 'dark' 
-                        ? theme.palette.grey[300]
-                        : theme.palette.grey[700],
-                    }}
-                  />
-
-                  <Button
-                    size="small"
-                    variant="contained"
-                    disableElevation
-                    onClick={handleViewModeToggle}
-                    startIcon={isTableView(viewMode) ? <StyleIcon /> : <ViewColumnIcon />}
-                    sx={{
-                      height: 32,
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
-                      borderRadius: 1,
-                      bgcolor: theme.palette.mode === 'dark' 
-                        ? '#B7940080'  // Brighter yellow with transparency
-                        : '#FFD700CC',  // Gold color with slight transparency
+                      width: 28,  // Reduced from 34
+                      height: 28,  // Reduced from 34
+                      color: theme.palette.text.secondary,
                       '&:hover': {
                         bgcolor: theme.palette.mode === 'dark' 
-                          ? '#B79400'   // Solid brighter yellow
-                          : '#FFD700',   // Solid gold
-                      },
-                      color: theme.palette.mode === 'dark' 
-                        ? theme.palette.common.white
-                        : '#000000',
+                          ? 'rgba(255, 255, 255, 0.1)' 
+                          : 'rgba(0, 0, 0, 0.08)',
+                      }
                     }}
                   >
-                    {isTableView(viewMode) ? 'Cards' : 'Table'}
-                  </Button>
+                    {isSidebarCollapsed ? <LastPageIcon /> : <FirstPageIcon />}
+                  </IconButton>
+
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 0.5,
+                    p: 0.5,
+                    borderRadius: '6px',
+                    border: '1px solid',
+                    borderColor: theme.palette.mode === 'dark' 
+                      ? 'rgba(255, 255, 255, 0.15)'
+                      : 'rgba(0, 0, 0, 0.15)',
+                  }}>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={handleViewModeToggle}
+                      startIcon={isTableView(viewMode) ? <StyleIcon /> : <ViewColumnIcon />}
+                      sx={{
+                        height: 26,  // Reduced from 32
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.text.primary,
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.05)'
+                            : 'rgba(0, 0, 0, 0.05)',
+                        }
+                      }}
+                    >
+                      {isTableView(viewMode) ? 'Cards' : 'Table'}
+                    </Button>
+                  </Box>
 
                   {/* Generation actions group */}
                   <Box sx={{ 
                     display: 'flex', 
-                    gap: 1, 
-                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
+                    gap: 0.5,
                     p: 0.5,
-                    borderRadius: 1
+                    borderRadius: '6px',
+                    border: '1px solid',
+                    borderColor: theme.palette.mode === 'dark' 
+                      ? 'rgba(255, 255, 255, 0.15)'
+                      : 'rgba(0, 0, 0, 0.15)',
                   }}>
                     <Button
-                      variant="contained"
-                      color="primary"
-                      disableElevation
+                      variant={isGenerating && generationType === 'qa' ? "contained" : "text"}
+                      color={isGenerating && generationType === 'qa' ? "error" : "primary"}
                       startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
                       onClick={isFlashcardView(viewMode) ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerateQA}
                       disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'qa')}
                       sx={{
-                        height: 32,
+                        height: 26,  // Reduced from 32
                         textTransform: 'none',
-                        fontWeight: 500,
+                        fontWeight: 600,
                         fontSize: '0.875rem',
-                        borderRadius: 1,
-                        bgcolor: isGenerating && generationType === 'qa' 
-                          ? theme.palette.error.main 
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.mode === 'dark' 
+                          ? theme.palette.primary.light
                           : theme.palette.primary.main,
                         '&:hover': {
-                          bgcolor: isGenerating && generationType === 'qa'
-                            ? theme.palette.error.dark
-                            : theme.palette.primary.dark,
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? alpha(theme.palette.primary.main, 0.15)
+                            : alpha(theme.palette.primary.main, 0.12),
+                        },
+                        '& .MuiSvgIcon-root': {
+                          color: 'inherit'
                         }
                       }}
                     >
@@ -2410,27 +2421,31 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     </Button>
 
                     <Button
-                      variant="contained"
-                      color="secondary"
-                      disableElevation
+                      variant={isGenerating && generationType === 'question' ? "contained" : "text"}
+                      color={isGenerating && generationType === 'question' ? "error" : "secondary"}
                       startIcon={isGenerating && generationType === 'question' ? <StopIcon /> : <HelpOutlineIcon />}
                       onClick={isFlashcardView(viewMode) 
                         ? () => handleSingleCardGenerateQuestion(qaPairs[currentIndex].id) 
                         : handleGenerateQuestion}
                       disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'question')}
                       sx={{
-                        height: 32,
+                        height: 26,  // Reduced from 32
                         textTransform: 'none',
-                        fontWeight: 500,
+                        fontWeight: 600,
                         fontSize: '0.875rem',
-                        borderRadius: 1,
-                        bgcolor: isGenerating && generationType === 'question'
-                          ? theme.palette.error.main
-                          : theme.palette.secondary.main,
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.mode === 'dark' 
+                          ? theme.palette.secondary.light
+                          : theme.palette.secondary.dark,
                         '&:hover': {
-                          bgcolor: isGenerating && generationType === 'question'
-                            ? theme.palette.error.dark
-                            : theme.palette.secondary.dark,
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? alpha(theme.palette.secondary.main, 0.15)
+                            : alpha(theme.palette.secondary.main, 0.12),
+                        },
+                        '& .MuiSvgIcon-root': {
+                          color: 'inherit'
                         }
                       }}
                     >
@@ -2440,27 +2455,31 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     </Button>
 
                     <Button
-                      variant="contained"
-                      color="success"
-                      disableElevation
+                      variant={isGenerating && generationType === 'answer' ? "contained" : "text"}
+                      color={isGenerating && generationType === 'answer' ? "error" : "success"}
                       startIcon={isGenerating && generationType === 'answer' ? <StopIcon /> : <LightbulbOutlinedIcon />}
                       onClick={isFlashcardView(viewMode) 
                         ? () => handleSingleCardGenerateAnswer(qaPairs[currentIndex].id) 
                         : handleGenerateAnswer}
                       disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'answer')}
                       sx={{
-                        height: 32,
+                        height: 26,  // Reduced from 32
                         textTransform: 'none',
-                        fontWeight: 500,
+                        fontWeight: 600,
                         fontSize: '0.875rem',
-                        borderRadius: 1,
-                        bgcolor: isGenerating && generationType === 'answer'
-                          ? theme.palette.error.main
-                          : theme.palette.success.main,
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.mode === 'dark' 
+                          ? theme.palette.success.light
+                          : theme.palette.success.dark,
                         '&:hover': {
-                          bgcolor: isGenerating && generationType === 'answer'
-                            ? theme.palette.error.dark
-                            : theme.palette.success.dark,
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? alpha(theme.palette.success.main, 0.15)
+                            : alpha(theme.palette.success.main, 0.12),
+                        },
+                        '& .MuiSvgIcon-root': {
+                          color: 'inherit'
                         }
                       }}
                     >
@@ -2473,36 +2492,30 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                   {/* Row editing actions group */}
                   <Box sx={{ 
                     display: 'flex', 
-                    gap: 1,
-                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
+                    gap: 0.5,
                     p: 0.5,
-                    borderRadius: 1
+                    borderRadius: '6px',
+                    border: '1px solid',
+                    borderColor: theme.palette.mode === 'dark' 
+                      ? 'rgba(255, 255, 255, 0.15)'
+                      : 'rgba(0, 0, 0, 0.15)',
                   }}>
                     <Button
                       size="small"
-                      variant="contained"
-                      disableElevation
+                      variant="text"
                       onClick={handleAddEmpty}
                       startIcon={<AddIcon />}
                       sx={{
-                        height: 32,
+                        height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
-                        borderRadius: 1,
-                        bgcolor: theme.palette.mode === 'dark' 
-                          ? alpha(theme.palette.info.main, 0.5)
-                          : alpha(theme.palette.info.main, 0.2),
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.info.main,
                         '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha(theme.palette.info.main, 0.7)
-                            : alpha(theme.palette.info.main, 0.3),
-                        },
-                        color: theme.palette.mode === 'dark'
-                          ? theme.palette.common.white
-                          : theme.palette.common.black,
-                        '& .MuiSvgIcon-root': {
-                          color: 'inherit'
+                          bgcolor: alpha(theme.palette.info.main, 0.08),
                         }
                       }}
                     >
@@ -2511,30 +2524,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
                     <Button
                       size="small"
-                      variant="contained"
-                      disableElevation
+                      variant="text"
                       onClick={handleDuplicate}
                       disabled={isTableView(viewMode) ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
                       startIcon={<ContentCopyIcon />}
                       sx={{
-                        height: 32,
+                        height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
-                        borderRadius: 1,
-                        bgcolor: theme.palette.mode === 'dark' 
-                          ? alpha(theme.palette.warning.main, 0.5)
-                          : alpha(theme.palette.warning.main, 0.2),
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.warning.main,
                         '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha(theme.palette.warning.main, 0.7)
-                            : alpha(theme.palette.warning.main, 0.3),
-                        },
-                        color: theme.palette.mode === 'dark'
-                          ? theme.palette.common.white
-                          : theme.palette.common.black,
-                        '& .MuiSvgIcon-root': {
-                          color: 'inherit'
+                          bgcolor: alpha(theme.palette.warning.main, 0.08),
                         }
                       }}
                     >
@@ -2543,18 +2547,35 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
                     <Button
                       size="small"
-                      variant="contained"
-                      disableElevation
+                      variant="text"
                       color="error"
                       onClick={handleDeleteSelected}
                       disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
                       startIcon={<DeleteIcon />}
                       sx={{
-                        height: 32,
+                        height: 26,  // Reduced from 32
                         textTransform: 'none',
-                        fontWeight: 500,
+                        fontWeight: 600,
                         fontSize: '0.875rem',
-                        borderRadius: 1,
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.mode === 'dark' 
+                          ? '#ff6b6b'  // Bright red for dark mode
+                          : '#d32f2f',  // Strong red for light mode
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 107, 107, 0.15)'
+                            : 'rgba(211, 47, 47, 0.12)',
+                        },
+                        '& .MuiSvgIcon-root': {
+                          color: 'inherit'
+                        },
+                        '&.Mui-disabled': {
+                          color: theme.palette.mode === 'dark'
+                            ? 'rgba(255, 107, 107, 0.3)'
+                            : 'rgba(211, 47, 47, 0.3)',
+                        }
                       }}
                     >
                       Delete
@@ -2563,51 +2584,58 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                 </Box>
 
                 {/* Right section */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Button
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 0.5,
+                    p: 0.5,
+                    borderRadius: '6px',
+                    border: '1px solid',
+                    borderColor: theme.palette.mode === 'dark' 
+                      ? 'rgba(255, 255, 255, 0.15)'
+                      : 'rgba(0, 0, 0, 0.15)',
+                  }}>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={handleExportCSV}
+                      disabled={qaPairs.length === 0}
+                      startIcon={<SaveAltIcon />}
+                      sx={{
+                        height: 26,  // Reduced from 32
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.text.primary,
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.05)'
+                            : 'rgba(0, 0, 0, 0.05)',
+                        }
+                      }}
+                    >
+                      Export
+                    </Button>
+                  </Box>
+                  <IconButton
                     size="small"
-                    variant="contained"
-                    disableElevation
-                    onClick={handleExportCSV}
-                    disabled={qaPairs.length === 0}
-                    startIcon={<SaveAltIcon />}
+                    onClick={onThemeChange}
                     sx={{
-                      height: 32,
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
-                      borderRadius: 1,
-                      bgcolor: theme.palette.mode === 'dark' 
-                        ? alpha(theme.palette.grey[300], 0.2)
-                        : alpha(theme.palette.grey[400], 0.4),
-                      color: theme.palette.mode === 'dark' 
-                        ? theme.palette.common.white
-                        : theme.palette.common.black,
+                      width: 34,
+                      height: 34,
+                      color: theme.palette.text.secondary,
                       '&:hover': {
                         bgcolor: theme.palette.mode === 'dark' 
-                          ? alpha(theme.palette.grey[300], 0.3)
-                          : alpha(theme.palette.grey[400], 0.6),
+                          ? 'rgba(255, 255, 255, 0.1)' 
+                          : 'rgba(0, 0, 0, 0.08)',
                       }
                     }}
                   >
-                    Export
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    disableElevation
-                    onClick={onThemeChange}
-                    startIcon={theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-                    sx={{
-                      height: 32,
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
-                      borderRadius: 1,
-                    }}
-                  >
-                    {theme.palette.mode === 'dark' ? 'Day' : 'Night'}
-                  </Button>
+                    {theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                  </IconButton>
                 </Box>
               </Box>
             </Box>
@@ -2670,7 +2698,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     },
                     '& .MuiTableHead-root .MuiTableCell-root:first-of-type, & .MuiTableBody-root .MuiTableCell-root:first-of-type': {
                       width: '48px',
-                      padding: '0 8px', // Consistent padding for checkbox cells
+                      padding: '0 0 0 14px', // Add left padding to align with sidebar button
                     },
                     '& .MuiTableBody-root .MuiTableRow-root': {
                       '&:hover': {
@@ -2680,7 +2708,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       },
                     },
                     '& .MuiCheckbox-root': {
-                      padding: '8px', // Consistent padding for all checkboxes
+                      padding: '8px',
                       borderRadius: '6px',
                       color: theme.palette.mode === 'dark' 
                         ? alpha(theme.palette.common.white, 0.3)

@@ -15,15 +15,23 @@ function ThemeWrapper() {
         
         typography: {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          fontSize: 12,
+          htmlFontSize: 16,
           h6: {
-            fontSize: '1rem',
+            fontSize: '0.85rem',
             fontWeight: 500,
           },
           body1: {
-            fontSize: '0.875rem',
+            fontSize: '0.75rem',
           },
           body2: {
-            fontSize: '0.8125rem',
+            fontSize: '0.7rem',
+          },
+          subtitle1: {
+            fontSize: '0.75rem',
+          },
+          subtitle2: {
+            fontSize: '0.7rem',
           },
         },
         shape: {
@@ -84,16 +92,16 @@ function ThemeWrapper() {
                 backgroundColor: 'transparent',
                 color: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.95)',
                 borderBottom: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)'}`,
-                height: 48,
+                height: 32,
               },
             },
           },
           MuiToolbar: {
             styleOverrides: {
               root: {
-                minHeight: 48,
+                minHeight: 32,
                 '@media (min-width: 600px)': {
-                  minHeight: 48,
+                  minHeight: 32,
                 },
               },
             },
@@ -103,7 +111,8 @@ function ThemeWrapper() {
               root: {
                 textTransform: 'none',
                 fontWeight: 500,
-                fontSize: '0.8125rem',
+                fontSize: '0.75rem',
+                padding: '4px 12px',
                 boxShadow: 'none',
                 '&:hover': {
                   boxShadow: 'none',
@@ -160,6 +169,12 @@ function ThemeWrapper() {
             },
             styleOverrides: {
               root: {
+                '& .MuiInputBase-root': {
+                  fontSize: '0.75rem',
+                },
+                '& .MuiInputLabel-root': {
+                  fontSize: '0.75rem',
+                },
                 '& .MuiInput-underline:before': {
                   borderBottom: 'none',
                 },
@@ -176,8 +191,8 @@ function ThemeWrapper() {
             styleOverrides: {
               root: {
                 borderBottom: 'none',
-                padding: '8px',
-                fontSize: '0.8125rem',
+                padding: '6px',
+                fontSize: '0.75rem',
               },
             },
           },
@@ -195,8 +210,18 @@ function ThemeWrapper() {
           MuiIconButton: {
             styleOverrides: {
               root: {
+                padding: 6,
+                '& .MuiSvgIcon-root': {
+                  fontSize: '1.2rem',
+                },
                 '&:hover': {
                   backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)',
+                },
+              },
+              sizeSmall: {
+                padding: 4,
+                '& .MuiSvgIcon-root': {
+                  fontSize: '1rem',
                 },
               },
             },
