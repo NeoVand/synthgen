@@ -43,9 +43,9 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
     navigator.clipboard.writeText(command);
   };
 
-  const renderOllamaSetup = () => {
+  const renderStartupInstructions = () => {
     if (isConnected) return null;
-    
+
     return (
       <>
         <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 500 }}>
@@ -80,66 +80,15 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
               </IconButton>
             </Box>
           </li>
-          <li>
-            <Typography variant="body2" color="text.secondary">
-              Start Ollama:
-            </Typography>
-            <Box sx={{ 
-              bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
-              p: 2,
-              my: 1,
-              borderRadius: 1,
-              position: 'relative'
-            }}>
-              <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
-                {isLocalNetwork ? 'ollama serve' : `OLLAMA_ORIGINS="${window.location.origin}" ollama serve`}
+          {!isLocalNetwork && isWindows && (
+            <li>
+              <Typography variant="body2" color="text.secondary">
+                Set up the environment variable:
               </Typography>
-              <IconButton 
-                size="small" 
-                onClick={() => handleCopyCommand(isLocalNetwork ? 'ollama serve' : `OLLAMA_ORIGINS="${window.location.origin}" ollama serve`)}
-                sx={{ position: 'absolute', right: 8, top: 8 }}
-              >
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Box>
-          </li>
-        </Box>
-      </>
-    );
-  };
-
-  const renderCORSInstructions = () => {
-    // If we're on a local network and connected, just show how to stop Ollama
-    if (isLocalNetwork && isConnected) {
-      return (
-        <>
-          <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 500 }}>
-            To stop Ollama:
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Simply close the terminal window running Ollama.
-          </Typography>
-        </>
-      );
-    }
-    
-    // If we're on a local network and not connected, don't show CORS instructions
-    if (isLocalNetwork && !isConnected) {
-      return null;
-    }
-
-    if (isWindows) {
-      return (
-        <>
-          {!isConnected && <Divider sx={{ my: 2 }} />}
-          <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 500 }}>
-            {isConnected ? 'To deactivate CORS and stop Ollama:' : 'To enable CORS on Windows:'}
-          </Typography>
-          {!isConnected ? (
-            <>
               <Box sx={{ 
                 bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
                 p: 2,
+                my: 1,
                 borderRadius: 1,
                 position: 'relative'
               }}>
@@ -154,82 +103,100 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
                   <ContentCopyIcon fontSize="small" />
                 </IconButton>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                1. Run this command in a terminal
-                <br />
-                2. Close all terminal windows running Ollama
-                <br />
-                3. Start Ollama normally with <code>ollama serve</code>
-              </Typography>
-            </>
-          ) : (
-            <>
-              <Box sx={{ 
-                bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
-                p: 2,
-                borderRadius: 1,
-                position: 'relative'
-              }}>
-                <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
-                  reg delete HKCU\Environment /F /V OLLAMA_ORIGINS
-                </Typography>
-                <IconButton 
-                  size="small" 
-                  onClick={() => handleCopyCommand('reg delete HKCU\\Environment /F /V OLLAMA_ORIGINS')}
-                  sx={{ position: 'absolute', right: 8, top: 8 }}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                1. Run this command in a terminal
-                <br />
-                2. Close all terminal windows running Ollama
-                <br />
-                3. Start Ollama normally again with <code>ollama serve</code>
-              </Typography>
-            </>
+            </li>
           )}
+          <li>
+            <Typography variant="body2" color="text.secondary">
+              Start Ollama:
+            </Typography>
+            <Box sx={{ 
+              bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
+              p: 2,
+              my: 1,
+              borderRadius: 1,
+              position: 'relative'
+            }}>
+              <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
+                {isLocalNetwork || isWindows ? 
+                  'ollama serve' : 
+                  `OLLAMA_ORIGINS="${window.location.origin}" ollama serve`}
+              </Typography>
+              <IconButton 
+                size="small" 
+                onClick={() => handleCopyCommand(isLocalNetwork || isWindows ? 
+                  'ollama serve' : 
+                  `OLLAMA_ORIGINS="${window.location.origin}" ollama serve`)}
+                sx={{ position: 'absolute', right: 8, top: 8 }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </li>
+        </Box>
+      </>
+    );
+  };
+
+  const renderDeactivationInstructions = () => {
+    if (!isConnected) return null;
+
+    if (isLocalNetwork) {
+      return (
+        <>
+          <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 500 }}>
+            To stop Ollama:
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Simply close the terminal window running Ollama.
+          </Typography>
+        </>
+      );
+    }
+
+    if (isWindows) {
+      return (
+        <>
+          <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 500 }}>
+            To stop Ollama and remove CORS settings:
+          </Typography>
+          <Box sx={{ 
+            bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
+            p: 2,
+            borderRadius: 1,
+            position: 'relative'
+          }}>
+            <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
+              reg delete HKCU\Environment /F /V OLLAMA_ORIGINS
+            </Typography>
+            <IconButton 
+              size="small" 
+              onClick={() => handleCopyCommand('reg delete HKCU\\Environment /F /V OLLAMA_ORIGINS')}
+              sx={{ position: 'absolute', right: 8, top: 8 }}
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            1. Run this command in a terminal
+            <br />
+            2. Close all terminal windows running Ollama
+            <br />
+            3. Start Ollama normally with <code>ollama serve</code>
+          </Typography>
         </>
       );
     }
 
     return (
       <>
-        {!isConnected && <Divider sx={{ my: 2 }} />}
         <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 500 }}>
-          {isConnected ? 'To deactivate CORS and stop Ollama:' : 'To enable CORS on Mac/Linux:'}
+          To stop Ollama:
         </Typography>
-        {!isConnected ? (
-          <>
-            <Box sx={{ 
-              bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
-              p: 2,
-              borderRadius: 1,
-              position: 'relative'
-            }}>
-              <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
-                OLLAMA_ORIGINS="{window.location.origin}" ollama serve
-              </Typography>
-              <IconButton 
-                size="small" 
-                onClick={() => handleCopyCommand(`OLLAMA_ORIGINS="${window.location.origin}" ollama serve`)}
-                sx={{ position: 'absolute', right: 8, top: 8 }}
-              >
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Run this command in a terminal to start Ollama with CORS enabled.
-            </Typography>
-          </>
-        ) : (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            1. Close the terminal window running Ollama
-            <br />
-            2. Start Ollama normally again with <code>ollama serve</code>
-          </Typography>
-        )}
+        <Typography variant="body2" color="text.secondary">
+          1. Close the terminal window running Ollama
+          <br />
+          2. Start Ollama normally with <code>ollama serve</code>
+        </Typography>
       </>
     );
   };
@@ -237,7 +204,7 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
   return (
     <Dialog 
       open={open} 
-      onClose={onClose}
+      onClose={isConnected ? onClose : undefined}
       maxWidth="sm"
       fullWidth
       PaperProps={{
@@ -269,8 +236,8 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
           </Typography>
         )}
         
-        {renderOllamaSetup()}
-        {renderCORSInstructions()}
+        {renderStartupInstructions()}
+        {renderDeactivationInstructions()}
 
         <Box sx={{ 
           mt: 3,
