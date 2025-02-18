@@ -50,6 +50,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import UploadIcon from '@mui/icons-material/Upload'
 
 // PDFJS
 import * as PDFJS from 'pdfjs-dist'
@@ -1057,8 +1058,98 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   };
 
   //------------------------------------------------------------------------------------
-  // 7. Export CSV
+  // 7. Import/Export CSV
   //------------------------------------------------------------------------------------
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      
+      // Parse CSV
+      const parseCSV = (text: string): string[][] => {
+        const rows: string[][] = [];
+        let currentRow: string[] = [];
+        let currentField = '';
+        let insideQuotes = false;
+        
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const nextChar = text[i + 1];
+          
+          if (char === '"') {
+            if (insideQuotes && nextChar === '"') {
+              currentField += '"';
+              i++; // Skip next quote
+            } else {
+              insideQuotes = !insideQuotes;
+            }
+          } else if (char === ',' && !insideQuotes) {
+            currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+            currentField = '';
+          } else if (char === '\n' && !insideQuotes) {
+            currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+            if (currentRow.some(field => field.length > 0)) {
+              rows.push(currentRow);
+            }
+            currentRow = [];
+            currentField = '';
+          } else if (char === '\r') {
+            continue;
+          } else {
+            currentField += char;
+          }
+        }
+        
+        if (currentField || currentRow.length > 0) {
+          currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+          if (currentRow.some(field => field.length > 0)) {
+            rows.push(currentRow);
+          }
+        }
+        
+        return rows;
+      };
+
+      const rows = parseCSV(text);
+      
+      // Validate CSV format
+      if (rows.length < 2) {
+        throw new Error('CSV must have at least a header row and one data row');
+      }
+
+      const headers = rows[0].map(h => h.toLowerCase().trim());
+      if (!headers.includes('context') || !headers.includes('question') || !headers.includes('answer')) {
+        throw new Error('CSV must have "context", "question", and "answer" columns');
+      }
+
+      const contextIndex = headers.indexOf('context');
+      const questionIndex = headers.indexOf('question');
+      const answerIndex = headers.indexOf('answer');
+
+      // Convert rows to QAPairs
+      const newPairs: QAPair[] = rows.slice(1).map((row, idx) => ({
+        id: qaPairs.length + idx + 1,
+        context: row[contextIndex] || '',
+        question: row[questionIndex] || '',
+        answer: row[answerIndex] || '',
+        selected: false,
+        generating: {
+          question: false,
+          answer: false
+        }
+      }));
+
+      setQaPairs(prev => [...prev, ...newPairs]);
+    } catch (err) {
+      console.error('Error importing CSV:', err);
+      alert('Invalid CSV format. Please ensure the file has "context", "question", and "answer" columns.');
+    } finally {
+      e.target.value = ''; // Reset input
+    }
+  };
+
   const handleExportCSV = () => {
     if (qaPairs.length === 0) {
       alert('No Q&A to export!')
@@ -1738,11 +1829,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         >
           {/* Sidebar Header */}
           <Box sx={(theme) => ({ 
-            p: 1,  // Reduced from 1.5
+            p: 1.,  // Reduced from 1.5
             display: 'flex', 
             alignItems: 'center',
             justifyContent: 'space-between',
-            height: 40,  // Reduced from 48 to match toolbar
+            height: 53,  // Reduced from 48 to match toolbar
             borderBottom: 1, 
             borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)',
             bgcolor: theme.palette.mode === 'dark'
@@ -2398,17 +2489,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 600,
-                        fontSize: '0.875rem',
+                        fontSize: isGenerating && generationType === 'qa' ? '0.75rem' : '0.875rem', // Smaller font in stop mode
                         borderRadius: '4px',
-                        minWidth: 0,
+                        minWidth: isGenerating && generationType === 'qa' ? 130 : 0, // Increased minimum width
                         px: 1.5,
-                        color: theme.palette.mode === 'dark' 
-                          ? theme.palette.primary.light
-                          : theme.palette.primary.main,
+                        color: isGenerating && generationType === 'qa' 
+                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
+                          : theme.palette.mode === 'dark' 
+                            ? theme.palette.primary.light
+                            : theme.palette.primary.main,
                         '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha(theme.palette.primary.main, 0.15)
-                            : alpha(theme.palette.primary.main, 0.12),
+                          bgcolor: isGenerating && generationType === 'qa'
+                            ? theme.palette.error.dark  // Darker red when hovering in stop state
+                            : theme.palette.mode === 'dark' 
+                              ? alpha(theme.palette.primary.main, 0.15)
+                              : alpha(theme.palette.primary.main, 0.12),
                         },
                         '& .MuiSvgIcon-root': {
                           color: 'inherit'
@@ -2432,17 +2527,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 600,
-                        fontSize: '0.875rem',
+                        fontSize: isGenerating && generationType === 'question' ? '0.75rem' : '0.875rem', // Smaller font in stop mode
                         borderRadius: '4px',
-                        minWidth: 0,
+                        minWidth: isGenerating && generationType === 'question' ? 130 : 0, // Increased minimum width
                         px: 1.5,
-                        color: theme.palette.mode === 'dark' 
-                          ? theme.palette.secondary.light
-                          : theme.palette.secondary.dark,
+                        color: isGenerating && generationType === 'question'
+                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
+                          : theme.palette.mode === 'dark' 
+                            ? theme.palette.secondary.light
+                            : theme.palette.secondary.dark,
                         '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha(theme.palette.secondary.main, 0.15)
-                            : alpha(theme.palette.secondary.main, 0.12),
+                          bgcolor: isGenerating && generationType === 'question'
+                            ? theme.palette.error.dark  // Darker red when hovering in stop state
+                            : theme.palette.mode === 'dark' 
+                              ? alpha(theme.palette.secondary.main, 0.15)
+                              : alpha(theme.palette.secondary.main, 0.12),
                         },
                         '& .MuiSvgIcon-root': {
                           color: 'inherit'
@@ -2466,17 +2565,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 600,
-                        fontSize: '0.875rem',
+                        fontSize: isGenerating && generationType === 'answer' ? '0.75rem' : '0.875rem', // Smaller font in stop mode
                         borderRadius: '4px',
-                        minWidth: 0,
+                        minWidth: isGenerating && generationType === 'answer' ? 130 : 0, // Increased minimum width
                         px: 1.5,
-                        color: theme.palette.mode === 'dark' 
-                          ? theme.palette.success.light
-                          : theme.palette.success.dark,
+                        color: isGenerating && generationType === 'answer'
+                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
+                          : theme.palette.mode === 'dark' 
+                            ? theme.palette.success.light
+                            : theme.palette.success.dark,
                         '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha(theme.palette.success.main, 0.15)
-                            : alpha(theme.palette.success.main, 0.12),
+                          bgcolor: isGenerating && generationType === 'answer'
+                            ? theme.palette.error.dark  // Darker red when hovering in stop state
+                            : theme.palette.mode === 'dark' 
+                              ? alpha(theme.palette.success.main, 0.15)
+                              : alpha(theme.palette.success.main, 0.12),
                         },
                         '& .MuiSvgIcon-root': {
                           color: 'inherit'
@@ -2598,11 +2701,40 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     <Button
                       size="small"
                       variant="text"
+                      component="label"
+                      startIcon={<UploadIcon />}
+                      sx={{
+                        height: 26,  // Added to match other button group
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: '0.875rem',
+                        borderRadius: '4px',
+                        minWidth: 0,
+                        px: 1.5,
+                        color: theme.palette.text.primary,
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.05)'
+                            : 'rgba(0, 0, 0, 0.05)',
+                        }
+                      }}
+                    >
+                      Import
+                      <input
+                        type="file"
+                        accept=".csv"
+                        hidden
+                        onChange={handleImportCSV}
+                      />
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="text"
                       onClick={handleExportCSV}
                       disabled={qaPairs.length === 0}
                       startIcon={<SaveAltIcon />}
                       sx={{
-                        height: 26,  // Reduced from 32
+                        height: 26,  // Added to match other button group
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
