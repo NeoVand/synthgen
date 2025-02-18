@@ -11,7 +11,6 @@ import {
   alpha,
   IconButton,
   Link,
-  Divider,
 } from '@mui/material';
 import ErrorIcon from '@mui/icons-material/Error';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
