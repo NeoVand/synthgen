@@ -33,25 +33,27 @@ function ThemeWrapper() {
           mode: mode as 'light' | 'dark',
           primary: {
             light: mode === 'dark' ? '#8388E5' : '#A5ACFF',
-            main: mode === 'dark' ? '#6b70c9' : '#8891FF',
-            dark: mode === 'dark' ? '#565ba3' : '#6B74E3',
-            contrastText: '#fff',
+            main: mode === 'dark' ? '#6b70c9' : '#A5ACFF',
+            dark: mode === 'dark' ? '#565ba3' : '#8891FF',
+            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
           },
           secondary: {
             light: mode === 'dark' ? '#B996E0' : '#D4B6FF',
-            main: mode === 'dark' ? '#9C6BC9' : '#B996E0',
-            dark: mode === 'dark' ? '#7E55A3' : '#9C6BC9',
-            contrastText: '#fff',
+            main: mode === 'dark' ? '#9C6BC9' : '#D4B6FF',
+            dark: mode === 'dark' ? '#7E55A3' : '#B996E0',
+            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
           },
           error: {
             light: mode === 'dark' ? '#D47F7F' : '#FFB1B1',
-            main: mode === 'dark' ? '#b85f5f' : '#FF9494',
-            dark: mode === 'dark' ? '#934B4B' : '#D67373',
+            main: mode === 'dark' ? '#b85f5f' : '#FFB1B1',
+            dark: mode === 'dark' ? '#934B4B' : '#FF9494',
+            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
           },
           success: {
             light: mode === 'dark' ? '#7FB99A' : '#B1E3C5',
-            main: mode === 'dark' ? '#5f9a7a' : '#91CBA8',
-            dark: mode === 'dark' ? '#4B7B61' : '#66A583',
+            main: mode === 'dark' ? '#5f9a7a' : '#B1E3C5',
+            dark: mode === 'dark' ? '#4B7B61' : '#91CBA8',
+            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
           },
           background: {
             default: mode === 'dark' ? '#0F1117' : '#F0F4F8',
@@ -115,21 +117,27 @@ function ThemeWrapper() {
                 },
               },
               containedPrimary: {
-                backgroundColor: mode === 'dark' ? '#4a4f8c' : '#8891FF',
+                backgroundColor: mode === 'dark' ? '#4a4f8c' : '#A5ACFF',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#565ba3' : '#6B74E3',
+                  backgroundColor: mode === 'dark' ? '#565ba3' : '#8891FF',
+                },
+              },
+              containedSecondary: {
+                backgroundColor: mode === 'dark' ? '#7E55A3' : '#D4B6FF',
+                '&:hover': {
+                  backgroundColor: mode === 'dark' ? '#9C6BC9' : '#B996E0',
                 },
               },
               containedError: {
-                backgroundColor: mode === 'dark' ? '#8c4646' : '#FF9494',
+                backgroundColor: mode === 'dark' ? '#8c4646' : '#FFB1B1',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#a35151' : '#D67373',
+                  backgroundColor: mode === 'dark' ? '#a35151' : '#FF9494',
                 },
               },
               containedSuccess: {
-                backgroundColor: mode === 'dark' ? '#4a725c' : '#91CBA8',
+                backgroundColor: mode === 'dark' ? '#4a725c' : '#B1E3C5',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#558269' : '#66A583',
+                  backgroundColor: mode === 'dark' ? '#558269' : '#91CBA8',
                 },
               },
               outlined: {

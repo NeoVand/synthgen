@@ -49,6 +49,7 @@ import { debounce } from 'lodash'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 // PDFJS
 import * as PDFJS from 'pdfjs-dist'
@@ -300,7 +301,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Add a state for tracking what type of generation is happening
-  const [generationType, setGenerationType] = useState<'summary' | 'qa' | null>(null)
+  const [generationType, setGenerationType] = useState<'summary' | 'qa' | 'question' | 'answer' | null>(null);
+
+  // Add state for tracking generation progress
+  const [generationProgress, setGenerationProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
 
   // Add state for sidebar
   const [sidebarWidth, setSidebarWidth] = useState<number>(400);
@@ -749,9 +753,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }
   };
 
-  const generateQA = async (row: QAPair) => {
+  // Add these new functions before the generateQA function
+  const generateQuestion = async (row: QAPair) => {
     let questionText = '';
-    let answerText = '';
 
     // Set initial generating state
     setQaPairs(prev =>
@@ -769,17 +773,45 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         debouncedUpdateQaPairs(row.id, { question: questionText });
       }
 
-      if (shouldStopGeneration) return;
-
-      // Update question and set answer generating state
+      // Final update
       setQaPairs(prev =>
         prev.map(r =>
-          r.id === row.id ? { ...r, question: questionText, generating: { question: false, answer: true } } : r
+          r.id === row.id ? {
+            ...r,
+            question: questionText,
+            generating: { question: false, answer: false }
+          } : r
         )
       );
 
+      return questionText;
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+        throw err;
+      }
+      console.error('Error generating question:', err);
+      return '';
+    }
+  };
+
+  const generateAnswer = async (row: QAPair) => {
+    if (!row.question.trim()) {
+      console.warn('Skipping answer generation - no question provided');
+      return '';
+    }
+
+    let answerText = '';
+
+    // Set generating state for answer
+    setQaPairs(prev =>
+      prev.map(r =>
+        r.id === row.id ? { ...r, generating: { question: false, answer: true } } : r
+      )
+    );
+
+    try {
       // Generate answer
-      const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${row.context}\nQuestion:\n${questionText}`;
+      const answerPrompt = `${promptAnswer}\nSummary:\n${docSummary}\nChunk:\n${row.context}\nQuestion:\n${row.question}`;
       for await (const chunk of doStreamCall(answerPrompt)) {
         if (shouldStopGeneration) break;
         answerText += chunk;
@@ -791,12 +823,29 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         prev.map(r =>
           r.id === row.id ? {
             ...r,
-            question: questionText,
             answer: answerText,
             generating: { question: false, answer: false }
           } : r
         )
       );
+
+      return answerText;
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+        throw err;
+      }
+      console.error('Error generating answer:', err);
+      return '';
+    }
+  };
+
+  // Modify the existing generateQA function to use the new abstracted functions
+  const generateQA = async (row: QAPair) => {
+    try {
+      const questionText = await generateQuestion(row);
+      if (shouldStopGeneration) return;
+      
+      await generateAnswer({ ...row, question: questionText });
     } catch (err) {
       if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
         throw err;
@@ -805,7 +854,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     }
   };
 
-  const handleGenerate = async () => {
+  // Add new handlers for the new generation types
+  const handleGenerateQuestion = async () => {
     if (isGenerating) {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
@@ -813,6 +863,131 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       }
       setIsGenerating(false);
       setGenerationType(null);
+      setGenerationProgress({ completed: 0, total: 0 });
+      return;
+    }
+
+    if (!ollamaSettings.model) {
+      alert('No model selected! Please check Ollama settings.');
+      return;
+    }
+
+    if (viewMode === 'flashcard') {
+      const currentQA = qaPairs[currentIndex];
+      if (currentQA) {
+        await generateQuestion(currentQA);
+      }
+      return;
+    }
+
+    const rowsToProcess = qaPairs.filter(q => q.selected).length > 0 
+      ? qaPairs.filter(q => q.selected)
+      : qaPairs;
+
+    if (rowsToProcess.length === 0) {
+      alert('No rows to process.');
+      return;
+    }
+
+    setShouldStopGeneration(false);
+    setIsGenerating(true);
+    setGenerationType('question');
+    setGenerationProgress({ completed: 0, total: rowsToProcess.length });
+
+    try {
+      for (let i = 0; i < rowsToProcess.length; i++) {
+        if (shouldStopGeneration) break;
+        await generateQuestion(rowsToProcess[i]);
+        setGenerationProgress(prev => ({ ...prev, completed: i + 1 }));
+      }
+    } catch (err) {
+      console.error('Error in generation process:', err);
+    } finally {
+      setIsGenerating(false);
+      setGenerationType(null);
+      setShouldStopGeneration(false);
+      setGenerationProgress({ completed: 0, total: 0 });
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
+  const handleGenerateAnswer = async () => {
+    if (isGenerating) {
+      setShouldStopGeneration(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress({ completed: 0, total: 0 });
+      return;
+    }
+
+    if (!ollamaSettings.model) {
+      alert('No model selected! Please check Ollama settings.');
+      return;
+    }
+
+    if (viewMode === 'flashcard') {
+      const currentQA = qaPairs[currentIndex];
+      if (currentQA) {
+        await generateAnswer(currentQA);
+      }
+      return;
+    }
+
+    const rowsToProcess = qaPairs.filter(q => q.selected).length > 0 
+      ? qaPairs.filter(q => q.selected)
+      : qaPairs;
+
+    if (rowsToProcess.length === 0) {
+      alert('No rows to process.');
+      return;
+    }
+
+    setShouldStopGeneration(false);
+    setIsGenerating(true);
+    setGenerationType('answer');
+    setGenerationProgress({ completed: 0, total: rowsToProcess.length });
+
+    try {
+      for (let i = 0; i < rowsToProcess.length; i++) {
+        if (shouldStopGeneration) break;
+        const row = rowsToProcess[i];
+        if (!row.question.trim()) {
+          console.warn(`Skipping row ${row.id} - no question provided`);
+          continue;
+        }
+        await generateAnswer(row);
+        setGenerationProgress(prev => ({ ...prev, completed: i + 1 }));
+      }
+    } catch (err) {
+      console.error('Error in generation process:', err);
+    } finally {
+      setIsGenerating(false);
+      setGenerationType(null);
+      setShouldStopGeneration(false);
+      setGenerationProgress({ completed: 0, total: 0 });
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
+  // Add handleGenerateQA function
+  const handleGenerateQA = async () => {
+    if (isGenerating) {
+      setShouldStopGeneration(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setIsGenerating(false);
+      setGenerationType(null);
+      setGenerationProgress({ completed: 0, total: 0 });
       return;
     }
 
@@ -841,12 +1016,14 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
     setShouldStopGeneration(false);
     setIsGenerating(true);
     setGenerationType('qa');
+    setGenerationProgress({ completed: 0, total: rowsToProcess.length });
 
     try {
       for (let i = 0; i < rowsToProcess.length; i++) {
         if (shouldStopGeneration) break;
         const row = rowsToProcess[i];
         await generateQA(row);
+        setGenerationProgress(prev => ({ ...prev, completed: i + 1 }));
       }
     } catch (err) {
       console.error('Error in generation process:', err);
@@ -854,6 +1031,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       setIsGenerating(false);
       setGenerationType(null);
       setShouldStopGeneration(false);
+      setGenerationProgress({ completed: 0, total: 0 });
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -1324,9 +1502,185 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         answer: false
       }
     };
-    setQaPairs(prev => [...prev, newQA]);
+
     if (viewMode === 'flashcard') {
-      setCurrentIndex(qaPairs.length); // Move to the new card
+      // In flashcard view, add after current card
+      const newQAPairs = [...qaPairs];
+      newQAPairs.splice(currentIndex + 1, 0, newQA);
+      setQaPairs(newQAPairs);
+      setCurrentIndex(currentIndex + 1); // Move to the new card
+    } else {
+      // In table view, add after selected rows or at the end if none selected
+      const selectedQAs = qaPairs.filter(qa => qa.selected);
+      if (selectedQAs.length === 0) {
+        // No rows selected, add to the end
+        setQaPairs(prev => [...prev, newQA]);
+      } else {
+        // Add after each selected row
+        const newQAPairs = [...qaPairs];
+        const insertions = selectedQAs
+          .sort((a, b) => {
+            // Get indices of the selected rows and sort in descending order
+            const indexA = newQAPairs.findIndex(pair => pair.id === a.id);
+            const indexB = newQAPairs.findIndex(pair => pair.id === b.id);
+            return indexB - indexA; // Sort in descending order
+          })
+          .map((selectedQA, index) => ({
+            index: newQAPairs.findIndex(pair => pair.id === selectedQA.id),
+            newQA: {
+              ...newQA,
+              id: newId + index
+            }
+          }));
+
+        // Insert new rows starting from the end
+        insertions.forEach(({ index, newQA }) => {
+          newQAPairs.splice(index + 1, 0, newQA);
+        });
+
+        setQaPairs(newQAPairs);
+      }
+    }
+  };
+
+  const handleDuplicate = () => {
+    if (viewMode === 'flashcard') {
+      // In flashcard view, duplicate current card
+      const currentQA = qaPairs[currentIndex];
+      if (!currentQA) return;
+
+      const newId = Math.max(...qaPairs.map(qa => qa.id)) + 1;
+      const duplicatedQA: QAPair = {
+        ...currentQA,
+        id: newId,
+        selected: false
+      };
+
+      // Insert after current card
+      const newQAPairs = [...qaPairs];
+      newQAPairs.splice(currentIndex + 1, 0, duplicatedQA);
+      setQaPairs(newQAPairs);
+      setCurrentIndex(currentIndex + 1); // Move to the duplicated card
+    } else {
+      // In table view, duplicate all selected cards
+      const selectedQAs = qaPairs.filter(qa => qa.selected);
+      if (selectedQAs.length === 0) return;
+
+      let nextId = Math.max(...qaPairs.map(qa => qa.id)) + 1;
+      const newQAPairs = [...qaPairs];
+
+      // Sort selected QAs by their position in descending order
+      const insertions = selectedQAs
+        .sort((a, b) => {
+          const indexA = newQAPairs.findIndex(pair => pair.id === a.id);
+          const indexB = newQAPairs.findIndex(pair => pair.id === b.id);
+          return indexB - indexA; // Sort in descending order
+        })
+        .map((selectedQA, index) => ({
+          index: newQAPairs.findIndex(pair => pair.id === selectedQA.id),
+          duplicatedQA: {
+            ...selectedQA,
+            id: nextId + index,
+            selected: false
+          }
+        }));
+
+      // Insert duplicates starting from the end
+      insertions.forEach(({ index, duplicatedQA }) => {
+        newQAPairs.splice(index + 1, 0, duplicatedQA);
+      });
+
+      setQaPairs(newQAPairs);
+    }
+  };
+
+  // Add new handlers for single card generation
+  const handleSingleCardGenerateQuestion = async (cardId: number) => {
+    if (isGenerating) {
+      setShouldStopGeneration(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setIsGenerating(false);
+      setGenerationType(null);
+      return;
+    }
+
+    if (!ollamaSettings.model) {
+      alert('No model selected! Please check Ollama settings.');
+      return;
+    }
+
+    const qa = qaPairs.find(q => q.id === cardId);
+    if (!qa) return;
+
+    setShouldStopGeneration(false);
+    setIsGenerating(true);
+    setGenerationType('question');
+
+    try {
+      await generateQuestion(qa);
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+        console.log('Generation process stopped by user');
+      } else {
+        console.error('Error in generation process:', err);
+      }
+    } finally {
+      setIsGenerating(false);
+      setGenerationType(null);
+      setShouldStopGeneration(false);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
+  const handleSingleCardGenerateAnswer = async (cardId: number) => {
+    if (isGenerating) {
+      setShouldStopGeneration(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setIsGenerating(false);
+      setGenerationType(null);
+      return;
+    }
+
+    if (!ollamaSettings.model) {
+      alert('No model selected! Please check Ollama settings.');
+      return;
+    }
+
+    const qa = qaPairs.find(q => q.id === cardId);
+    if (!qa) return;
+
+    if (!qa.question.trim()) {
+      alert('No question provided. Please generate or enter a question first.');
+      return;
+    }
+
+    setShouldStopGeneration(false);
+    setIsGenerating(true);
+    setGenerationType('answer');
+
+    try {
+      await generateAnswer(qa);
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+        console.log('Generation process stopped by user');
+      } else {
+        console.error('Error in generation process:', err);
+      }
+    } finally {
+      setIsGenerating(false);
+      setGenerationType(null);
+      setShouldStopGeneration(false);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -1359,14 +1713,22 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             flexDirection: 'column',
             visibility: isSidebarCollapsed ? 'hidden' : 'visible',
             opacity: isSidebarCollapsed ? 0 : 1,
+            borderRadius: '16px',
+            mx: 3,
+            mt: 3,
+            mb: 3,
+            overflow: 'hidden',
           })}
         >
           {/* Sidebar Header */}
           <Box sx={(theme) => ({ 
-            p: 2, 
+            p: 1.5,
             display: 'flex', 
             alignItems: 'center',
-            borderBottom: 'none',
+            justifyContent: 'space-between',
+            height: 64,
+            borderBottom: 1, 
+            borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)',
             bgcolor: theme.palette.mode === 'dark'
               ? alpha(theme.palette.background.paper, 0.4)
               : alpha('#FFFFFF', 0.5),
@@ -1967,10 +2329,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                 display: 'flex', 
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                height: 40
+                height: 40,
+                gap: 2
               }}>
                 {/* Left section */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <IconButton
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                     size="small"
@@ -1984,22 +2347,35 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     {isSidebarCollapsed ? <LastPageIcon /> : <FirstPageIcon />}
                   </IconButton>
 
-                  <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                  {/* Main action buttons */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 1,
+                    bgcolor: theme.palette.mode === 'dark' 
+                      ? alpha(theme.palette.background.paper, 0.3)
+                      : alpha(theme.palette.background.paper, 0.5),
+                    p: 0.5,
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    borderColor: theme.palette.mode === 'dark' 
+                      ? alpha(theme.palette.common.white, 0.1)
+                      : alpha(theme.palette.common.black, 0.1),
+                  }}>
+                    {/* Generate Q&A Button */}
                     <Button
                       variant="contained"
-                      color={isGenerating && generationType === 'qa' ? "error" : "primary"}
-                      size="small"
+                      color="primary"
                       disableElevation
                       startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
-                      onClick={viewMode === 'flashcard' ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerate}
-                      disabled={!ollamaSettings.model || qaPairs.length === 0}
+                      onClick={viewMode === 'flashcard' ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerateQA}
+                      disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'qa')}
                       sx={{
                         minWidth: '120px',
                         height: 32,
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
-                        borderRadius: '6px',
+                        borderRadius: 1,
                         px: 2,
                         bgcolor: isGenerating && generationType === 'qa' 
                           ? theme.palette.error.main 
@@ -2012,126 +2388,179 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       }}
                     >
                       {isGenerating && generationType === 'qa' 
-                        ? "Stop" 
-                        : viewMode === 'flashcard' 
-                          ? "Generate Card" 
-                          : "Generate Q&A"}
+                        ? `Stop (${generationProgress.completed}/${generationProgress.total})`
+                        : 'Generate Q&A'}
                     </Button>
 
+                    {/* Generate Question Button */}
                     <Button
-                      color="primary"
-                      size="small"
-                      onClick={handleAddEmpty}
-                      startIcon={<AddIcon fontSize="small" />}
+                      variant="contained"
+                      color="secondary"
+                      disableElevation
+                      startIcon={isGenerating && generationType === 'question' ? <StopIcon /> : <HelpOutlineIcon />}
+                      onClick={viewMode === 'flashcard' 
+                        ? () => handleSingleCardGenerateQuestion(qaPairs[currentIndex].id) 
+                        : handleGenerateQuestion}
+                      disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'question')}
                       sx={{
-                        ml: 1,
+                        minWidth: '120px',
                         height: 32,
-                        minWidth: 'auto',
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
-                        color: theme.palette.primary.main,
-                        px: {
-                          xs: 1,
-                          sm: 2
-                        },
-                        '& .MuiButton-startIcon': {
-                          mr: {
-                            xs: 0,
-                            sm: 1
-                          }
-                        },
+                        borderRadius: 1,
+                        px: 2,
+                        bgcolor: isGenerating && generationType === 'question'
+                          ? theme.palette.error.main
+                          : theme.palette.secondary.main,
                         '&:hover': {
-                          bgcolor: alpha(theme.palette.primary.main, 0.08),
+                          bgcolor: isGenerating && generationType === 'question'
+                            ? theme.palette.error.dark
+                            : theme.palette.secondary.dark,
                         }
                       }}
                     >
-                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                        Add Empty
-                      </Box>
+                      {isGenerating && generationType === 'question' 
+                        ? `Stop (${generationProgress.completed}/${generationProgress.total})`
+                        : 'Generate Question'}
                     </Button>
 
+                    {/* Generate Answer Button */}
                     <Button
-                      color="error"
-                      size="small"
-                      onClick={handleDeleteSelected}
-                      disabled={qaPairs.length === 0}
-                      startIcon={<DeleteIcon fontSize="small" />}
+                      variant="contained"
+                      color="success"
+                      disableElevation
+                      startIcon={isGenerating && generationType === 'answer' ? <StopIcon /> : <LightbulbOutlinedIcon />}
+                      onClick={viewMode === 'flashcard' 
+                        ? () => handleSingleCardGenerateAnswer(qaPairs[currentIndex].id) 
+                        : handleGenerateAnswer}
+                      disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'answer')}
                       sx={{
-                        ml: 1,
+                        minWidth: '120px',
                         height: 32,
-                        minWidth: 'auto',
                         textTransform: 'none',
                         fontWeight: 500,
                         fontSize: '0.875rem',
-                        color: theme.palette.error.main,
-                        px: {
-                          xs: 1,
-                          sm: 2
-                        },
-                        '& .MuiButton-startIcon': {
-                          mr: {
-                            xs: 0,
-                            sm: 1
-                          }
-                        },
+                        borderRadius: 1,
+                        px: 2,
+                        bgcolor: isGenerating && generationType === 'answer'
+                          ? theme.palette.error.main
+                          : theme.palette.success.main,
                         '&:hover': {
-                          bgcolor: alpha(theme.palette.error.main, 0.08),
-                        },
-                        '&.Mui-disabled': {
-                          color: theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.3)' 
-                            : 'rgba(0, 0, 0, 0.26)'
+                          bgcolor: isGenerating && generationType === 'answer'
+                            ? theme.palette.error.dark
+                            : theme.palette.success.dark,
                         }
                       }}
                     >
-                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                        Delete
-                      </Box>
+                      {isGenerating && generationType === 'answer' 
+                        ? `Stop (${generationProgress.completed}/${generationProgress.total})`
+                        : 'Generate Answer'}
                     </Button>
+                  </Box>
+
+                  {/* Secondary actions */}
+                  <Box sx={{ 
+                    display: 'flex',
+                    gap: 1,
+                    bgcolor: theme.palette.mode === 'dark' 
+                      ? alpha(theme.palette.background.paper, 0.3)
+                      : alpha(theme.palette.background.paper, 0.5),
+                    p: 0.5,
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    borderColor: theme.palette.mode === 'dark' 
+                      ? alpha(theme.palette.common.white, 0.1)
+                      : alpha(theme.palette.common.black, 0.1),
+                  }}>
+                    <Tooltip title="Add empty card">
+                      <IconButton
+                        size="small"
+                        onClick={handleAddEmpty}
+                        sx={{
+                          color: theme.palette.primary.main,
+                          '&:hover': {
+                            bgcolor: alpha(theme.palette.primary.main, 0.08),
+                          }
+                        }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title={viewMode === 'table' ? "Duplicate selected" : "Duplicate current card"}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={handleDuplicate}
+                          disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
+                          sx={{
+                            color: theme.palette.info.main,
+                            '&:hover': {
+                              bgcolor: alpha(theme.palette.info.main, 0.08),
+                            },
+                            '&.Mui-disabled': {
+                              color: theme.palette.mode === 'dark' 
+                                ? 'rgba(255, 255, 255, 0.3)' 
+                                : 'rgba(0, 0, 0, 0.26)'
+                            }
+                          }}
+                        >
+                          <ContentCopyIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+
+                    <Tooltip title="Delete selected">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={handleDeleteSelected}
+                          disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
+                          sx={{
+                            color: theme.palette.error.main,
+                            '&:hover': {
+                              bgcolor: alpha(theme.palette.error.main, 0.08),
+                            },
+                            '&.Mui-disabled': {
+                              color: theme.palette.mode === 'dark' 
+                                ? 'rgba(255, 255, 255, 0.3)' 
+                                : 'rgba(0, 0, 0, 0.26)'
+                            }
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   </Box>
                 </Box>
 
                 {/* Right section */}
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   {viewMode === 'table' ? (
-                    <Button
-                      color="primary"
-                      size="small"
-                      onClick={handleExportCSV}
-                      disabled={qaPairs.length === 0}
-                      startIcon={<SaveAltIcon fontSize="small" />}
-                      sx={{
-                        height: 32,
-                        minWidth: 'auto',
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        fontSize: '0.875rem',
-                        color: theme.palette.primary.main,
-                        px: {
-                          xs: 1,
-                          sm: 2
-                        },
-                        '& .MuiButton-startIcon': {
-                          mr: {
-                            xs: 0,
-                            sm: 1
-                          }
-                        },
-                        '&:hover': {
-                          bgcolor: alpha(theme.palette.primary.main, 0.08),
-                        },
-                        '&.Mui-disabled': {
-                          color: theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.3)' 
-                            : 'rgba(0, 0, 0, 0.26)'
-                        }
-                      }}
-                    >
-                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                        Export
-                      </Box>
-                    </Button>
+                    <Tooltip title="Export to CSV">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={handleExportCSV}
+                          disabled={qaPairs.length === 0}
+                          sx={{
+                            color: theme.palette.primary.main,
+                            '&:hover': {
+                              bgcolor: alpha(theme.palette.primary.main, 0.08),
+                            },
+                            '&.Mui-disabled': {
+                              color: theme.palette.mode === 'dark' 
+                                ? 'rgba(255, 255, 255, 0.3)' 
+                                : 'rgba(0, 0, 0, 0.26)'
+                            }
+                          }}
+                        >
+                          <SaveAltIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   ) : (
                     <CardNavigation 
                       currentIndex={currentIndex}
@@ -2248,7 +2677,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                             display: 'flex', 
                             alignItems: 'center', 
                             gap: 1,
-                            color: theme.palette.primary.main
+                            color: theme.palette.mode === 'dark'
+                              ? theme.palette.primary.light
+                              : theme.palette.primary.dark
                           }}>
                             <ExtensionIcon sx={{ fontSize: '1.1rem' }} />
                             Context
@@ -2266,7 +2697,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                             display: 'flex', 
                             alignItems: 'center', 
                             gap: 1,
-                            color: theme.palette.secondary.main
+                            color: theme.palette.mode === 'dark'
+                              ? theme.palette.secondary.light
+                              : theme.palette.secondary.dark
                           }}>
                             <HelpOutlineIcon sx={{ fontSize: '1.1rem' }} />
                             Question
@@ -2284,7 +2717,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                             display: 'flex', 
                             alignItems: 'center', 
                             gap: 1,
-                            color: theme.palette.success.main
+                            color: theme.palette.mode === 'dark'
+                              ? theme.palette.success.light
+                              : theme.palette.success.dark
                           }}>
                             <LightbulbOutlinedIcon sx={{ fontSize: '1.1rem' }} />
                             Answer
@@ -2404,37 +2839,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                         },
                                       }}
                                     />
-                                    {!isExpanded && content.split('\n').length > 3 && (
-                                      <Box
-                                        sx={{
-                                          position: 'absolute',
-                                          bottom: 0,
-                                          left: 0,
-                                          right: 0,
-                                          height: '2em',
-                                          background: `linear-gradient(transparent, ${
-                                            theme.palette.mode === 'dark' 
-                                              ? 'rgba(0, 0, 0, 0.8)' 
-                                              : 'rgb(248, 249, 251)'
-                                          } 80%)`,
-                                          pointerEvents: 'none',
-                                          display: 'flex',
-                                          alignItems: 'flex-end',
-                                          justifyContent: 'center',
-                                          pb: 0.5,
-                                        }}
-                                      >
-                                        <Typography
-                                          variant="caption"
-                                          sx={{
-                                            color: theme.palette.text.disabled,
-                                            fontSize: '0.75rem',
-                                          }}
-                                        >
-                                          •••
-                                        </Typography>
-                                      </Box>
-                                    )}
                                   </Box>
                                 </TableCell>
                               );
@@ -2493,6 +2897,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
           </Paper>
         </Box>
       </Box>
+      {/* Add back the OllamaConnectionModal */}
       <OllamaConnectionModal
         open={showConnectionModal}
         onClose={() => isOllamaConnected && setShowConnectionModal(false)}

@@ -73,17 +73,23 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   // Section-specific color styles
   const contextHeaderStyles = {
     ...sectionHeaderStyles,
-    color: theme.palette.primary.main,
+    color: theme.palette.mode === 'dark'
+      ? theme.palette.primary.light
+      : theme.palette.primary.dark,
   };
 
   const questionHeaderStyles = {
     ...sectionHeaderStyles,
-    color: theme.palette.secondary.main,
+    color: theme.palette.mode === 'dark'
+      ? theme.palette.secondary.light
+      : theme.palette.secondary.dark,
   };
 
   const answerHeaderStyles = {
     ...sectionHeaderStyles,
-    color: theme.palette.success.main,
+    color: theme.palette.mode === 'dark'
+      ? theme.palette.success.light
+      : theme.palette.success.dark,
   };
 
   if (qaPairs.length === 0) {
