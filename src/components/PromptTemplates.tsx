@@ -9,6 +9,10 @@ import {
   Tooltip,
   useTheme,
   alpha,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import SaveIcon from '@mui/icons-material/Save';
@@ -24,6 +28,8 @@ interface PromptTemplatesProps {
   initialAnswerPrompt: string;
 }
 
+type DialogMode = 'switch' | 'save' | null;
+
 const PromptTemplates: React.FC<PromptTemplatesProps> = ({
   onPromptChange,
   initialQuestionPrompt,
@@ -34,6 +40,12 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
   const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate | null>(null);
   const [editedTemplate, setEditedTemplate] = useState<PromptTemplate | null>(null);
   const [originalName, setOriginalName] = useState<string>('');
+  const [isEdited, setIsEdited] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<DialogMode>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<PromptTemplate | null>(null);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [showNameInput, setShowNameInput] = useState(false);
 
   // Initialize with the first template or current prompts
   useEffect(() => {
@@ -54,42 +66,137 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
     }
   }, [editedTemplate, onPromptChange]);
 
-  const handleTemplateChange = (template: PromptTemplate) => {
-    setSelectedTemplate(template);
-    // Load saved edits if they exist
-    const savedTemplate = templates.find(t => t.name === template.name);
-    setEditedTemplate(savedTemplate || template);
-    setOriginalName(template.name);
+  // Generate a new template name with increment
+  const generateNewName = (baseName: string) => {
+    const match = baseName.match(/(.*?)(?:\s*\(edited\s*(\d+)\))?$/);
+    const base = match?.[1]?.trim() || baseName;
+    const currentNum = match?.[2] ? parseInt(match[2]) : 0;
+    
+    let newName = `${base} (edited ${currentNum + 1})`;
+    let num = currentNum + 1;
+    
+    while (templates.some(t => t.name === newName)) {
+      num++;
+      newName = `${base} (edited ${num})`;
+    }
+    
+    return newName;
   };
 
-  const handleSaveTemplate = () => {
-    if (!editedTemplate) return;
-
-    // Check if a template with the new name already exists
-    const existingTemplate = templates.find(t => t.name === editedTemplate.name && t.name !== originalName);
-    if (existingTemplate) {
-      if (window.confirm(`A template named "${editedTemplate.name}" already exists. Do you want to override it?`)) {
-        // Override existing template
-        setTemplates(prev => prev.map(t => 
-          t.name === editedTemplate.name ? editedTemplate : t
-        ));
-        setSelectedTemplate(editedTemplate);
-        setOriginalName(editedTemplate.name);
-      }
+  const handleTemplateChange = (template: PromptTemplate) => {
+    if (isEdited && editedTemplate) {
+      setPendingTemplate(template);
+      setNewTemplateName(generateNewName(editedTemplate.name));
+      setDialogMode('switch');
+      setDialogOpen(true);
       return;
     }
 
-    // If name has changed, add the new template while keeping the original
+    setSelectedTemplate(template);
+    setEditedTemplate(template);
+    setOriginalName(template.name);
+    setIsEdited(false);
+  };
+
+  const handlePromptEdit = (field: 'questionPrompt' | 'answerPrompt', value: string) => {
+    if (!editedTemplate) return;
+
+    const newTemplate = { ...editedTemplate, [field]: value };
+    setEditedTemplate(newTemplate);
+    setIsEdited(
+      newTemplate.questionPrompt !== selectedTemplate?.questionPrompt ||
+      newTemplate.answerPrompt !== selectedTemplate?.answerPrompt
+    );
+  };
+
+  const handleNameEdit = (newName: string) => {
+    if (!editedTemplate) return;
+    setEditedTemplate({ ...editedTemplate, name: newName });
+  };
+
+  const handleSaveTemplate = () => {
+    if (!editedTemplate || !isEdited) return;
+
+    // If name is different from original, save directly as new template
     if (editedTemplate.name !== originalName) {
       setTemplates(prev => [...prev, editedTemplate]);
-    } else {
-      // Just update the existing template
-      setTemplates(prev => prev.map(t => 
-        t.name === editedTemplate.name ? editedTemplate : t
-      ));
+      setSelectedTemplate(editedTemplate);
+      setOriginalName(editedTemplate.name);
+      setIsEdited(false);
+      return;
     }
-    setSelectedTemplate(editedTemplate);
-    setOriginalName(editedTemplate.name);
+
+    // If only prompts are edited, show save dialog
+    setNewTemplateName(generateNewName(editedTemplate.name));
+    setDialogMode('save');
+    setDialogOpen(true);
+  };
+
+  const handleDialogAction = (action: 'discard' | 'overwrite' | 'saveAs') => {
+    if (!editedTemplate) return;
+
+    if (action === 'saveAs') {
+      setShowNameInput(true);
+      return;
+    }
+
+    switch (action) {
+      case 'discard':
+        // Reset to selected template
+        setEditedTemplate(selectedTemplate);
+        setIsEdited(false);
+        if (pendingTemplate) {
+          setSelectedTemplate(pendingTemplate);
+          setEditedTemplate(pendingTemplate);
+          setOriginalName(pendingTemplate.name);
+          setPendingTemplate(null);
+        }
+        break;
+
+      case 'overwrite':
+        // Update existing template
+        setTemplates(prev => prev.map(t => 
+          t.name === originalName ? editedTemplate : t
+        ));
+        setSelectedTemplate(editedTemplate);
+        setIsEdited(false);
+        if (pendingTemplate) {
+          setSelectedTemplate(pendingTemplate);
+          setEditedTemplate(pendingTemplate);
+          setOriginalName(pendingTemplate.name);
+          setPendingTemplate(null);
+        }
+        break;
+    }
+
+    setDialogOpen(false);
+    setDialogMode(null);
+    setNewTemplateName('');
+    setShowNameInput(false);
+  };
+
+  const handleSaveAsConfirm = () => {
+    if (!editedTemplate || !newTemplateName.trim()) return;
+    
+    // Save as new template with the name from dialog
+    const newTemplate = { ...editedTemplate, name: newTemplateName.trim() };
+    setTemplates(prev => [...prev, newTemplate]);
+    setSelectedTemplate(newTemplate);
+    setEditedTemplate(newTemplate);
+    setOriginalName(newTemplate.name);
+    setIsEdited(false);
+
+    if (pendingTemplate) {
+      setSelectedTemplate(pendingTemplate);
+      setEditedTemplate(pendingTemplate);
+      setOriginalName(pendingTemplate.name);
+      setPendingTemplate(null);
+    }
+
+    setDialogOpen(false);
+    setDialogMode(null);
+    setNewTemplateName('');
+    setShowNameInput(false);
   };
 
   const handleAddCustomTemplate = () => {
@@ -290,7 +397,7 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
           fullWidth
           size="small"
           value={editedTemplate.name}
-          onChange={(e) => setEditedTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
+          onChange={(e) => handleNameEdit(e.target.value)}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: '8px',
@@ -319,9 +426,7 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
           minRows={3}
           maxRows={6}
           value={editedTemplate.questionPrompt}
-          onChange={(e) => setEditedTemplate(prev => 
-            prev ? { ...prev, questionPrompt: e.target.value } : null
-          )}
+          onChange={(e) => handlePromptEdit('questionPrompt', e.target.value)}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: '8px',
@@ -373,9 +478,7 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
           minRows={3}
           maxRows={6}
           value={editedTemplate.answerPrompt}
-          onChange={(e) => setEditedTemplate(prev => 
-            prev ? { ...prev, answerPrompt: e.target.value } : null
-          )}
+          onChange={(e) => handlePromptEdit('answerPrompt', e.target.value)}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: '8px',
@@ -420,6 +523,7 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
           size="small"
           startIcon={<SaveIcon />}
           onClick={handleSaveTemplate}
+          disabled={!isEdited}
           sx={{
             height: 32,
             textTransform: 'none',
@@ -503,6 +607,156 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
           Export
         </Button>
       </Box>
+
+      {/* Save/Switch Dialog */}
+      <Dialog
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false);
+          setShowNameInput(false);
+          setNewTemplateName('');
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            bgcolor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.background.paper, 0.8)
+              : alpha('#FFFFFF', 0.8),
+            backdropFilter: 'blur(20px)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          pb: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+        }}>
+          <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
+            {showNameInput ? 'Save as New Template' : dialogMode === 'switch' ? 'Unsaved Changes' : 'Save Template'}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {showNameInput ? (
+              <>
+                <Typography variant="body1">
+                  Enter a name for the new template:
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="New template name"
+                  value={newTemplateName}
+                  onChange={(e) => setNewTemplateName(e.target.value)}
+                  autoFocus
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '8px',
+                      fontSize: '0.875rem',
+                    }
+                  }}
+                />
+              </>
+            ) : (
+              <Typography variant="body1">
+                {dialogMode === 'switch' 
+                  ? 'You have unsaved changes. What would you like to do?'
+                  : 'How would you like to save your changes?'}
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, display: 'flex', gap: 1 }}>
+          {!showNameInput && dialogMode === 'switch' && (
+            <Button
+              onClick={() => handleDialogAction('discard')}
+              variant="outlined"
+              sx={{
+                borderRadius: 1,
+                textTransform: 'none',
+                px: 3,
+                borderColor: alpha(theme.palette.error.main, 0.5),
+                color: theme.palette.error.main,
+                '&:hover': {
+                  borderColor: theme.palette.error.main,
+                  bgcolor: alpha(theme.palette.error.main, 0.04),
+                }
+              }}
+            >
+              Discard Changes
+            </Button>
+          )}
+          {showNameInput ? (
+            <>
+              <Button
+                onClick={() => {
+                  setShowNameInput(false);
+                  setNewTemplateName(generateNewName(editedTemplate?.name || ''));
+                }}
+                variant="outlined"
+                sx={{
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  px: 3,
+                  borderColor: alpha(theme.palette.error.main, 0.5),
+                  color: theme.palette.error.main,
+                  '&:hover': {
+                    borderColor: theme.palette.error.main,
+                    bgcolor: alpha(theme.palette.error.main, 0.04),
+                  }
+                }}
+              >
+                Back
+              </Button>
+              <Button
+                onClick={handleSaveAsConfirm}
+                variant="contained"
+                disabled={!newTemplateName.trim()}
+                sx={{
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  px: 3,
+                }}
+              >
+                Save
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={() => handleDialogAction('overwrite')}
+                variant="outlined"
+                sx={{
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  px: 3,
+                  borderColor: alpha(theme.palette.warning.main, 0.5),
+                  color: theme.palette.warning.main,
+                  '&:hover': {
+                    borderColor: theme.palette.warning.main,
+                    bgcolor: alpha(theme.palette.warning.main, 0.04),
+                  }
+                }}
+              >
+                Overwrite Existing
+              </Button>
+              <Button
+                onClick={() => handleDialogAction('saveAs')}
+                variant="contained"
+                sx={{
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  px: 3,
+                  bgcolor: theme.palette.primary.main,
+                }}
+              >
+                Save as New Template
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
