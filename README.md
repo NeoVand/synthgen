@@ -1,28 +1,100 @@
-# SynthGen: Ollama based synthetic Q&A dataset generation from your data
+# SynthGen: AI-Powered Q&A Dataset Generator 🤖
 
-SynthGen is a user-friendly desktop application that helps you generate high-quality synthetic question-answer datasets from your documents. Perfect for creating training and evaluation datasets for LLMs, embedding models, RAG systems, and other NLP applications.
+SynthGen is a modern desktop application that helps you create high-quality question-answer datasets from your documents using Ollama's local LLMs. Perfect for training data generation, RAG systems, and NLP applications.
 
-## Features
+## ✨ Features
 
-📄 **Multi-format Support**: Upload and process documents in various formats (PDF, DOCX, TXT, CSV)
+- 📝 **Smart Document Processing**: Support for PDF, DOCX, TXT, and CSV files with configurable text chunking
+- 🎯 **Customizable Prompts**: Create, edit, and save prompt templates for different types of Q&A generation
+- 🔄 **Dual View Modes**: 
+  - Table view for bulk operations and dataset management
+  - Flashcard view for focused editing of individual Q&A pairs
+- ⚡ **Advanced Controls**: 
+  - Fine-tune model parameters (temperature, context size, etc.)
+  - Platform-aware Ollama connection handling with CORS support
+  - Import/Export prompt templates
+- 🎨 **Modern UI**: Clean, responsive interface with dark/light mode support
+- 🌐 **Zero Backend**: Fully static web application - deploy anywhere, including GitHub Pages
 
-🔄 **Smart Text Chunking**: Configurable text chunking with adjustable size and overlap
+## 🚀 Getting Started
 
-🤖 **Ollama Integration**: Leverage local LLMs through Ollama for data generation
+1. Install [Ollama](https://ollama.ai)
+2. Start Ollama with CORS enabled:
+   ```bash
+   # For Windows
+   set "OLLAMA_ORIGINS=YOUR_DEPLOYMENT_URL" && ollama serve
 
-📊 **Flexible Generation**: Generate both document summaries and Q&A pairs
+   # For macOS/Linux
+   OLLAMA_ORIGINS="YOUR_DEPLOYMENT_URL" ollama serve
+   ```
+   Replace `YOUR_DEPLOYMENT_URL` with your deployment URL (e.g., "https://username.github.io")
 
-✏️ **Interactive Editing**: Edit generated content directly in the interface
+3. Pull your preferred model:
+   ```bash
+   ollama pull mistral
+   ```
 
-💳 **Dual View Modes**: Switch between table view for bulk operations and flashcard view for focused editing
+4. Access SynthGen:
+   - Deploy your own instance on GitHub Pages
+   - Or run locally:
+     ```bash
+     git clone https://github.com/NeoVand/synthgen.git
+     cd synthgen
+     npm install
+     npm run dev
+     ```
 
-💾 **Easy Export**: Export your dataset as CSV for immediate use
+## 💡 Quick Tips
 
-🎛️ **Advanced Controls**: Fine-tune generation parameters (temperature, top-p, context size)
+- Use the flashcard view for focused editing of individual Q&A pairs
+- Save and reuse prompt templates for consistent Q&A generation
+- Adjust model parameters to control the creativity and accuracy of generated content
+- Use the table view for bulk operations and dataset management
 
-🎯 **Selective Generation**: Generate Q&A for specific chunks or the entire document
+## 🛠️ Development
 
-🌓 **Dark/Light Mode**: Comfortable viewing in any lighting condition
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+## 🗺️ Roadmap
+
+- 🖼️ **Document Enhancement**:
+  - Support for images using vision-language models in Ollama
+  - Multi-document processing capabilities
+  
+- 💾 **Data Management**:
+  - Browser-based local data persistence
+  - Advanced document chunking with LlamaIndex splitters
+  
+- 🔌 **LLM Integration**:
+  - Support for cloud providers:
+    - OpenAI
+    - Anthropic
+    - Azure
+    - Groq
+    - Amazon Bedrock
+    
+- 🎯 **Extended Applications**:
+  - Synthetic data generation for:
+    - Classification tasks
+    - Chat applications
+    - Custom NLP applications
+
+## 🤝 Contributing
+
+Feel free to open issues or submit pull requests with improvements.
+
+## 📄 License
+
+MIT
 
 ## Prerequisites
 
@@ -113,14 +185,6 @@ ollama serve
 - Use selective generation to focus on specific sections of your document
 - Switch to flashcard view for focused editing and review of individual Q&A pairs
 - Use table view for bulk operations and overall dataset management
-
-## Contributing
-
-Feel free to open issues or submit pull requests with improvements.
-
-## License
-
-[Add your license here]
 
 ## Requirements
 
