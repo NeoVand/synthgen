@@ -243,7 +243,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
   // Summarization
   const [summaryPrompt, setSummaryPrompt] = useState<string>(
-    'Please provide a concise summary of the following content:'
+    "Create a focused, factual summary of the following text. The summary should capture key points and main ideas without adding external information. Output only the raw summary text without any greetings, markdown, or formatting."
   )
   const [docSummary, setDocSummary] = useState<string>('')
 
