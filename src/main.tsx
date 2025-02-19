@@ -3,35 +3,38 @@ import { createRoot } from 'react-dom/client'
 import { CssBaseline, ThemeProvider, createTheme, useMediaQuery } from '@mui/material'
 import { useMemo, useState } from 'react'
 import App from './App.tsx'
+import { Theme } from '@mui/material/styles'
 
 // ThemeWrapper component to handle theme switching
 function ThemeWrapper() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)')
   const [mode, setMode] = useState(prefersDarkMode ? 'dark' : 'light')
 
-  const theme = useMemo(
+  const theme: Theme = useMemo(
     () =>
       createTheme({
-        
         typography: {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-          fontSize: 12,
+          fontSize: 13,
           htmlFontSize: 16,
           h6: {
-            fontSize: '0.85rem',
-            fontWeight: 500,
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            letterSpacing: '0.0075em',
           },
           body1: {
-            fontSize: '0.75rem',
+            fontSize: '0.875rem',
           },
           body2: {
-            fontSize: '0.7rem',
+            fontSize: '0.8125rem',
           },
           subtitle1: {
-            fontSize: '0.75rem',
+            fontSize: '0.875rem',
+            fontWeight: 500,
           },
           subtitle2: {
-            fontSize: '0.7rem',
+            fontSize: '0.8125rem',
+            fontWeight: 500,
           },
         },
         shape: {
@@ -40,47 +43,32 @@ function ThemeWrapper() {
         palette: {
           mode: mode as 'light' | 'dark',
           primary: {
-            light: mode === 'dark' ? '#8388E5' : '#A5ACFF',
-            main: mode === 'dark' ? '#6b70c9' : '#A5ACFF',
-            dark: mode === 'dark' ? '#565ba3' : '#8891FF',
-            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
+            main: mode === 'dark' ? '#4A5D5E' : '#687864',
+            light: mode === 'dark' ? '#5B7475' : '#8A9B8A',
+            dark: mode === 'dark' ? '#384748' : '#4C5A4C',
+            contrastText: '#FFFFFF',
           },
           secondary: {
-            light: mode === 'dark' ? '#B996E0' : '#D4B6FF',
-            main: mode === 'dark' ? '#9C6BC9' : '#D4B6FF',
-            dark: mode === 'dark' ? '#7E55A3' : '#B996E0',
-            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
+            main: mode === 'dark' ? '#E6877C' : '#B67F75',
+            light: mode === 'dark' ? '#F2ADA4' : '#D4A49D',
+            dark: mode === 'dark' ? '#CC6359' : '#8F5F57',
+            contrastText: '#FFFFFF',
           },
           error: {
-            light: mode === 'dark' ? '#D47F7F' : '#FFB1B1',
-            main: mode === 'dark' ? '#b85f5f' : '#FFB1B1',
-            dark: mode === 'dark' ? '#934B4B' : '#FF9494',
-            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
+            main: mode === 'dark' ? '#E57373' : '#C75D5D',
           },
           success: {
-            light: mode === 'dark' ? '#7FB99A' : '#B1E3C5',
-            main: mode === 'dark' ? '#5f9a7a' : '#B1E3C5',
-            dark: mode === 'dark' ? '#4B7B61' : '#91CBA8',
-            contrastText: mode === 'dark' ? '#fff' : 'rgba(0, 0, 0, 0.87)',
+            main: mode === 'dark' ? '#81C784' : '#639A66',
           },
           background: {
-            default: mode === 'dark' ? '#0F1117' : '#F0F4F8',
-            paper: mode === 'dark' ? '#1A1D27' : '#FFFFFF',
+            default: mode === 'dark' ? '#1A1C1E' : '#F5F2ED',
+            paper: mode === 'dark' ? '#242628' : '#F5F2ED',
           },
           text: {
-            primary: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.85)',
-            secondary: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.55)',
-            disabled: mode === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(15, 23, 42, 0.35)',
+            primary: mode === 'dark' ? '#FFFFFF' : '#2C3333',
+            secondary: mode === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#595F5F',
           },
-          action: {
-            active: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.6)',
-            hover: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.03)',
-            selected: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.06)',
-            disabled: mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(15, 23, 42, 0.24)',
-            disabledBackground: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)',
-            focus: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)',
-          },
-          divider: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.06)',
+          divider: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(44, 51, 51, 0.08)',
         },
         components: {
           MuiAppBar: {
@@ -89,9 +77,13 @@ function ThemeWrapper() {
             },
             styleOverrides: {
               root: {
-                backgroundColor: 'transparent',
-                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.95)',
-                borderBottom: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)'}`,
+                backgroundColor: mode === 'dark' ? '#1D1F21' : '#ECEAE5',
+                color: mode === 'dark'
+                  ? 'rgba(255, 255, 255, 0.95)'
+                  : 'rgba(44, 51, 51, 0.95)',
+                borderRight: `1px solid ${mode === 'dark'
+                  ? 'rgba(255, 255, 255, 0.1)'
+                  : 'rgba(44, 51, 51, 0.08)'}`,
                 height: 32,
               },
             },
@@ -111,54 +103,80 @@ function ThemeWrapper() {
               root: {
                 textTransform: 'none',
                 fontWeight: 500,
-                fontSize: '0.75rem',
-                padding: '4px 12px',
+                fontSize: '0.85rem',
+                padding: '6px 16px',
                 boxShadow: 'none',
+                borderRadius: '4px',
                 '&:hover': {
                   boxShadow: 'none',
                 },
               },
               contained: {
-                backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.03)',
+                backgroundColor: mode === 'dark' ? '#242628' : '#F5F2ED',
+                color: mode === 'dark' ? '#FFFFFF' : '#2C3333',
+                border: `1px solid ${mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.1)' 
+                  : 'rgba(44, 51, 51, 0.08)'}`,
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.06)',
-                  boxShadow: 'none',
+                  backgroundColor: mode === 'dark' ? '#2A2D30' : '#FFFFFF',
+                  borderColor: mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.15)' 
+                    : 'rgba(44, 51, 51, 0.12)',
                 },
               },
               containedPrimary: {
-                backgroundColor: mode === 'dark' ? '#4a4f8c' : '#A5ACFF',
+                backgroundColor: mode === 'dark' ? '#242628' : '#F5F2ED',
+                color: mode === 'dark' ? '#FFFFFF' : '#2C3333',
+                border: `1px solid ${mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.1)' 
+                  : 'rgba(44, 51, 51, 0.08)'}`,
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#565ba3' : '#8891FF',
+                  backgroundColor: mode === 'dark' ? '#2A2D30' : '#FFFFFF',
+                  borderColor: mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.15)' 
+                    : 'rgba(44, 51, 51, 0.12)',
                 },
               },
               containedSecondary: {
-                backgroundColor: mode === 'dark' ? '#7E55A3' : '#D4B6FF',
+                backgroundColor: mode === 'dark' ? '#E6877C' : '#B67F75',
+                color: '#FFFFFF',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#9C6BC9' : '#B996E0',
+                  backgroundColor: mode === 'dark' ? '#CC6359' : '#8F5F57',
                 },
               },
               containedError: {
-                backgroundColor: mode === 'dark' ? '#8c4646' : '#FFB1B1',
+                backgroundColor: mode === 'dark' ? '#E57373' : '#C75D5D',
+                color: '#FFFFFF',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#a35151' : '#FF9494',
+                  backgroundColor: mode === 'dark' ? '#D32F2F' : '#B25252',
                 },
               },
               containedSuccess: {
-                backgroundColor: mode === 'dark' ? '#4a725c' : '#B1E3C5',
+                backgroundColor: mode === 'dark' ? '#81C784' : '#639A66',
+                color: '#FFFFFF',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? '#558269' : '#91CBA8',
+                  backgroundColor: mode === 'dark' ? '#558269' : '#4B7B4E',
                 },
               },
               outlined: {
-                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.12)',
+                borderColor: mode === 'dark'
+                  ? 'rgba(224, 224, 224, 0.15)'
+                  : 'rgba(44, 51, 51, 0.15)',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.03)',
-                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.2)',
+                  borderColor: mode === 'dark'
+                    ? 'rgba(224, 224, 224, 0.25)'
+                    : 'rgba(44, 51, 51, 0.25)',
+                  backgroundColor: mode === 'dark'
+                    ? 'rgba(224, 224, 224, 0.05)'
+                    : 'rgba(44, 51, 51, 0.05)',
                 },
               },
               text: {
+                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(44, 51, 51, 0.85)',
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.03)',
+                  backgroundColor: mode === 'dark'
+                    ? 'rgba(255, 255, 255, 0.05)'
+                    : 'rgba(44, 51, 51, 0.05)',
                 },
               },
             },
@@ -190,9 +208,40 @@ function ThemeWrapper() {
           MuiTableCell: {
             styleOverrides: {
               root: {
-                borderBottom: 'none',
+                backgroundColor: 'transparent',
+                borderBottom: `1px solid ${mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.08)' 
+                  : 'rgba(44, 51, 51, 0.06)'}`,
                 padding: '6px',
-                fontSize: '0.75rem',
+                fontSize: '0.85rem',
+                '&:hover': {
+                  backgroundColor: mode === 'dark' ? '#2A2D30' : '#ECEAE5',
+                },
+              },
+              head: {
+                backgroundColor: mode === 'dark' ? '#1D1F21' : '#ECEAE5',
+                fontWeight: 600,
+              },
+            },
+          },
+          MuiTableRow: {
+            styleOverrides: {
+              root: {
+                '&:nth-of-type(odd)': {
+                  backgroundColor: mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.02)' 
+                    : 'rgba(0, 0, 0, 0.02)',
+                },
+                '&:hover': {
+                  backgroundColor: mode === 'dark'
+                    ? 'rgba(255, 255, 255, 0.04)'
+                    : 'rgba(0, 0, 0, 0.04)',
+                },
+                '&:focus-within': {
+                  backgroundColor: mode === 'dark'
+                    ? '#2A2D30'
+                    : '#ECEAE5',
+                },
               },
             },
           },
@@ -203,7 +252,15 @@ function ThemeWrapper() {
             styleOverrides: {
               root: {
                 backgroundImage: 'none',
-                border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)'}`,
+                backgroundColor: mode === 'dark' ? '#242628' : '#F5F2ED',
+                border: 'none',
+                borderRadius: 0,
+                '&.Mui-selected, &:focus-within': {
+                  backgroundColor: mode === 'dark' ? '#2A2D30' : '#ECEAE5',
+                  borderColor: mode === 'dark'
+                    ? 'rgba(255, 255, 255, 0.25)'
+                    : 'rgba(44, 51, 51, 0.25)',
+                },
               },
             },
           },
@@ -215,7 +272,9 @@ function ThemeWrapper() {
                   fontSize: '1.2rem',
                 },
                 '&:hover': {
-                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)',
+                  backgroundColor: mode === 'dark'
+                    ? 'rgba(224, 224, 224, 0.05)'
+                    : 'rgba(44, 51, 51, 0.05)',
                 },
               },
               sizeSmall: {
@@ -229,7 +288,9 @@ function ThemeWrapper() {
           MuiCheckbox: {
             styleOverrides: {
               root: {
-                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(15, 23, 42, 0.4)',
+                color: mode === 'dark'
+                  ? 'rgba(224, 224, 224, 0.5)'
+                  : 'rgba(44, 51, 51, 0.4)',
               },
             },
           },

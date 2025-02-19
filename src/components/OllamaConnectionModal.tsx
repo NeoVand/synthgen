@@ -8,7 +8,6 @@ import {
   Typography,
   Box,
   useTheme,
-  alpha,
   IconButton,
   Link,
 } from '@mui/material';
@@ -61,10 +60,13 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
               Pull a model (e.g., Mistral) by running:
             </Typography>
             <Box sx={{ 
-              bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
+              bgcolor: theme.palette.mode === 'dark' 
+                ? '#1A1A1A'
+                : '#F5F5F5',
               p: 2,
               my: 1,
               borderRadius: 1,
+              border: `1px solid ${theme.palette.divider}`,
               position: 'relative'
             }}>
               <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
@@ -85,10 +87,13 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
                 Set up the environment variable:
               </Typography>
               <Box sx={{ 
-                bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
+                bgcolor: theme.palette.mode === 'dark' 
+                  ? '#1A1A1A'
+                  : '#F5F5F5',
                 p: 2,
                 my: 1,
                 borderRadius: 1,
+                border: `1px solid ${theme.palette.divider}`,
                 position: 'relative'
               }}>
                 <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
@@ -109,10 +114,13 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
               Start Ollama:
             </Typography>
             <Box sx={{ 
-              bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
+              bgcolor: theme.palette.mode === 'dark' 
+                ? '#1A1A1A'
+                : '#F5F5F5',
               p: 2,
               my: 1,
               borderRadius: 1,
+              border: `1px solid ${theme.palette.divider}`,
               position: 'relative'
             }}>
               <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
@@ -159,9 +167,12 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
             To stop Ollama and remove CORS settings:
           </Typography>
           <Box sx={{ 
-            bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
+            bgcolor: theme.palette.mode === 'dark' 
+              ? '#1A1A1A'
+              : '#F5F5F5',
             p: 2,
             borderRadius: 1,
+            border: `1px solid ${theme.palette.divider}`,
             position: 'relative'
           }}>
             <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>
@@ -209,10 +220,8 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
       PaperProps={{
         sx: {
           borderRadius: 2,
-          bgcolor: theme.palette.mode === 'dark' 
-            ? alpha(theme.palette.background.paper, 0.8)
-            : alpha('#FFFFFF', 0.8),
-          backdropFilter: 'blur(20px)',
+          bgcolor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.divider}`,
         }
       }}
     >
@@ -241,8 +250,11 @@ const OllamaConnectionModal: React.FC<OllamaConnectionModalProps> = ({
         <Box sx={{ 
           mt: 3,
           p: 2,
-          bgcolor: theme.palette.mode === 'dark' ? alpha('#000', 0.2) : alpha('#000', 0.03),
+          bgcolor: theme.palette.mode === 'dark' 
+            ? '#1A1A1A'
+            : '#F5F5F5',
           borderRadius: 1,
+          border: `1px solid ${theme.palette.divider}`,
           display: 'flex',
           alignItems: 'center',
           gap: 1

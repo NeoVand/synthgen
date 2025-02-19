@@ -120,11 +120,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
         {/* Context Section */}
         <Paper elevation={0} sx={{ 
           p: 3,
-          bgcolor: theme.palette.mode === 'dark' 
-            ? alpha(theme.palette.background.paper, 0.4)
-            : alpha('#FFFFFF', 0.5),
-          backdropFilter: 'blur(20px)',
+          bgcolor: theme.palette.background.paper,
           borderRadius: 2,
+          border: `1px solid ${theme.palette.divider}`,
         }}>
           <Box sx={contextHeaderStyles}>
             <ExtensionIcon />
@@ -236,11 +234,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
         {/* Question Section */}
         <Paper elevation={0} sx={{ 
           p: 3,
-          bgcolor: theme.palette.mode === 'dark' 
-            ? alpha(theme.palette.background.paper, 0.4)
-            : alpha('#FFFFFF', 0.5),
-          backdropFilter: 'blur(20px)',
+          bgcolor: theme.palette.background.paper,
           borderRadius: 2,
+          border: `1px solid ${theme.palette.divider}`,
         }}>
           <Box sx={questionHeaderStyles}>
             <HelpOutlineIcon />
@@ -271,11 +267,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
         {/* Answer Section */}
         <Paper elevation={0} sx={{ 
           p: 3,
-          bgcolor: theme.palette.mode === 'dark' 
-            ? alpha(theme.palette.background.paper, 0.4)
-            : alpha('#FFFFFF', 0.5),
-          backdropFilter: 'blur(20px)',
+          bgcolor: theme.palette.background.paper,
           borderRadius: 2,
+          border: `1px solid ${theme.palette.divider}`,
         }}>
           <Box sx={answerHeaderStyles}>
             <LightbulbOutlinedIcon />

@@ -143,20 +143,6 @@ function getSectionRegistry() {
   return { register, getElement };
 }
 
-// Add these style constants at the top of the file
-const GLASS_EFFECT_LIGHT = {
-  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  backdropFilter: 'blur(20px)',
-  border: 'none',
-  boxShadow: 'none',
-};
-
-const GLASS_EFFECT_DARK = {
-  backgroundColor: 'rgba(20, 24, 33, 0.6)',
-  backdropFilter: 'blur(20px)',
-  border: 'none',
-  boxShadow: 'none',
-};
 
 // Add type for chunking algorithms
 type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv';
@@ -1492,9 +1478,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         );
 
         for await (const chunk of doStreamCall(answerPrompt)) {
-          if (shouldStopGeneration) {
-            throw new Error('AbortError');
-          }
+          if (shouldStopGeneration) break;
           answerText += chunk;
           // Update state with accumulated text
           setQaPairs(prev =>
@@ -1828,10 +1812,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
       display: 'flex', 
       flexDirection: 'column', 
       overflow: 'hidden',
-      bgcolor: theme.palette.mode === 'dark' ? 'background.default' : '#F0F4F8',
-      backgroundImage: theme.palette.mode === 'dark' 
-        ? 'none'
-        : 'linear-gradient(120deg, #F0F4F8 0%, #E8F0FE 100%)',
+      bgcolor: theme.palette.mode === 'dark' ? 'background.default' : '#F5F2ED',
+      backgroundImage: 'none',
     }}>
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Sidebar */}
@@ -1842,8 +1824,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             maxWidth: isSidebarCollapsed ? 0 : undefined,
             transition: isResizing ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             position: 'relative',
-            ...(theme.palette.mode === 'light' ? GLASS_EFFECT_LIGHT : GLASS_EFFECT_DARK),
-            borderRight: 'none',
+            backgroundColor: theme.palette.mode === 'dark' ? '#1D1F21' : '#ECEAE5',
+            borderRight: `1px solid ${theme.palette.divider}`,
             display: 'flex',
             flexDirection: 'column',
             visibility: isSidebarCollapsed ? 'hidden' : 'visible',
@@ -1854,17 +1836,16 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         >
           {/* Sidebar Header */}
           <Box sx={(theme) => ({ 
-            p: 1.,  // Reduced from 1.5
+            p: 1,
             display: 'flex', 
             alignItems: 'center',
             justifyContent: 'space-between',
-            height: 53,  // Reduced from 48 to match toolbar
+            height: 53,
             borderBottom: 1, 
-            borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)',
+            borderColor: theme.palette.divider,
             bgcolor: theme.palette.mode === 'dark'
-              ? alpha(theme.palette.background.paper, 0.4)
-              : alpha('#FFFFFF', 0.5),
-            backdropFilter: 'blur(20px)',
+              ? '#1A1C1E'
+              : '#F5F2ED',
           })}>
             <ScienceIcon sx={{ 
               mr: 1.5, 
@@ -2110,7 +2091,30 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                   '& .MuiOutlinedInput-root': {
                                     borderRadius: '8px',
                                     fontSize: '0.875rem',
-                                    lineHeight: 1.6
+                                    lineHeight: 1.6,
+                                    '& textarea': {
+                                      paddingRight: '16px',
+                                      '&::-webkit-scrollbar': {
+                                        width: '8px',
+                                        height: '8px'
+                                      },
+                                      '&::-webkit-scrollbar-track': {
+                                        background: 'transparent'
+                                      },
+                                      '&::-webkit-scrollbar-thumb': {
+                                        background: theme.palette.mode === 'dark' 
+                                          ? 'rgba(255, 255, 255, 0.1)' 
+                                          : 'rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '100px',
+                                        border: '2px solid transparent',
+                                        backgroundClip: 'padding-box',
+                                        '&:hover': {
+                                          background: theme.palette.mode === 'dark' 
+                                            ? 'rgba(255, 255, 255, 0.2)' 
+                                            : 'rgba(0, 0, 0, 0.2)',
+                                        }
+                                      }
+                                    }
                                   }
                                 }}
                               />
@@ -2407,17 +2411,17 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             height: '100%', 
             display: 'flex', 
             flexDirection: 'column',
-            ...(theme.palette.mode === 'light' ? GLASS_EFFECT_LIGHT : GLASS_EFFECT_DARK),
+            bgcolor: theme.palette.background.paper,
             overflow: 'hidden',
+            borderRadius: 0,
           })}>
             <Box sx={(theme) => ({ 
               p: 1.5,
               borderBottom: 1, 
-              borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)',
+              borderColor: theme.palette.divider,
               bgcolor: theme.palette.mode === 'dark'
-                ? alpha(theme.palette.background.paper, 0.4)
-                : alpha('#FFFFFF', 0.5),
-              backdropFilter: 'blur(20px)',
+                ? '#1A1C1E'
+                : '#F5F2ED',
             })}>
               <Box sx={{ 
                 display: 'flex', 
@@ -2501,21 +2505,24 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 600,
-                        fontSize: isGenerating && generationType === 'qa' ? '0.75rem' : '0.875rem', // Smaller font in stop mode
+                        fontSize: isGenerating && generationType === 'qa' ? '0.75rem' : '0.875rem',
                         borderRadius: '4px',
-                        minWidth: isGenerating && generationType === 'qa' ? 130 : 0, // Increased minimum width
+                        minWidth: isGenerating && generationType === 'qa' ? 130 : 0,
                         px: 1.5,
                         color: isGenerating && generationType === 'qa' 
-                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
+                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // Keep stop state colors
                           : theme.palette.mode === 'dark' 
-                            ? theme.palette.primary.light
-                            : theme.palette.primary.main,
+                            ? '#90CAF9'  // Bright blue for dark mode
+                            : '#2196F3',  // Bright blue for light mode
+                        bgcolor: isGenerating && generationType === 'qa'
+                          ? undefined  // Keep stop state background
+                          : 'transparent',  // No initial background
                         '&:hover': {
                           bgcolor: isGenerating && generationType === 'qa'
-                            ? theme.palette.error.dark  // Darker red when hovering in stop state
+                            ? theme.palette.error.dark  // Keep stop state hover
                             : theme.palette.mode === 'dark' 
-                              ? alpha(theme.palette.primary.main, 0.15)
-                              : alpha(theme.palette.primary.main, 0.12),
+                              ? alpha('#90CAF9', 0.2)  // Brighter blue hover in dark mode
+                              : alpha('#2196F3', 0.15),  // Brighter blue hover in light mode
                         },
                         '& .MuiSvgIcon-root': {
                           color: 'inherit'
@@ -2539,9 +2546,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 600,
-                        fontSize: isGenerating && generationType === 'question' ? '0.75rem' : '0.875rem', // Smaller font in stop mode
+                        fontSize: isGenerating && generationType === 'question' ? '0.75rem' : '0.875rem',
                         borderRadius: '4px',
-                        minWidth: isGenerating && generationType === 'question' ? 130 : 0, // Increased minimum width
+                        minWidth: isGenerating && generationType === 'question' ? 130 : 0,
                         px: 1.5,
                         color: isGenerating && generationType === 'question'
                           ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
@@ -2577,9 +2584,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         height: 26,  // Reduced from 32
                         textTransform: 'none',
                         fontWeight: 600,
-                        fontSize: isGenerating && generationType === 'answer' ? '0.75rem' : '0.875rem', // Smaller font in stop mode
+                        fontSize: isGenerating && generationType === 'answer' ? '0.75rem' : '0.875rem',
                         borderRadius: '4px',
-                        minWidth: isGenerating && generationType === 'answer' ? 130 : 0, // Increased minimum width
+                        minWidth: isGenerating && generationType === 'answer' ? 130 : 0,
                         px: 1.5,
                         color: isGenerating && generationType === 'answer'
                           ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state

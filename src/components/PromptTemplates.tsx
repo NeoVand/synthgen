@@ -514,94 +514,63 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
 
       {/* Action Buttons */}
       <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 1
+        display: 'flex',
+        gap: 1,
+        mt: 2
       }}>
         <Button
           variant="contained"
-          size="small"
-          startIcon={<SaveIcon />}
+          color="primary"
+          fullWidth
           onClick={handleSaveTemplate}
-          disabled={!isEdited}
+          startIcon={<SaveIcon />}
           sx={{
-            height: 32,
             textTransform: 'none',
             fontWeight: 500,
-            fontSize: '0.875rem',
-            bgcolor: theme.palette.mode === 'dark' 
-              ? alpha(theme.palette.primary.main, 0.2)
-              : alpha(theme.palette.primary.main, 0.1),
-            color: theme.palette.mode === 'dark' 
-              ? theme.palette.primary.light
-              : theme.palette.primary.main,
-            '&:hover': {
-              bgcolor: theme.palette.mode === 'dark' 
-                ? alpha(theme.palette.primary.main, 0.3)
-                : alpha(theme.palette.primary.main, 0.2),
-              boxShadow: 'none',
-            },
             boxShadow: 'none',
+            '&:hover': {
+              boxShadow: 'none'
+            }
           }}
         >
           Save
         </Button>
         <Button
-          component="label"
           variant="contained"
-          size="small"
+          color="primary"
+          component="label"
+          fullWidth
           startIcon={<FileUploadIcon />}
           sx={{
-            height: 32,
             textTransform: 'none',
             fontWeight: 500,
-            fontSize: '0.875rem',
-            bgcolor: theme.palette.mode === 'dark' 
-              ? alpha(theme.palette.primary.main, 0.2)
-              : alpha(theme.palette.primary.main, 0.1),
-            color: theme.palette.mode === 'dark' 
-              ? theme.palette.primary.light
-              : theme.palette.primary.main,
-            '&:hover': {
-              bgcolor: theme.palette.mode === 'dark' 
-                ? alpha(theme.palette.primary.main, 0.3)
-                : alpha(theme.palette.primary.main, 0.2),
-              boxShadow: 'none',
-            },
             boxShadow: 'none',
+            '&:hover': {
+              boxShadow: 'none'
+            }
           }}
         >
           Import
           <input
             type="file"
-            hidden
             accept=".json"
+            hidden
             onChange={handleImportTemplates}
           />
         </Button>
         <Button
           variant="contained"
-          size="small"
-          startIcon={<FileDownloadIcon />}
+          color="primary"
+          fullWidth
           onClick={handleExportTemplates}
+          startIcon={<FileDownloadIcon />}
           sx={{
-            height: 32,
             textTransform: 'none',
             fontWeight: 500,
-            fontSize: '0.875rem',
-            bgcolor: theme.palette.mode === 'dark' 
-              ? alpha(theme.palette.primary.main, 0.2)
-              : alpha(theme.palette.primary.main, 0.1),
-            color: theme.palette.mode === 'dark' 
-              ? theme.palette.primary.light
-              : theme.palette.primary.main,
-            '&:hover': {
-              bgcolor: theme.palette.mode === 'dark' 
-                ? alpha(theme.palette.primary.main, 0.3)
-                : alpha(theme.palette.primary.main, 0.2),
-              boxShadow: 'none',
-            },
             boxShadow: 'none',
+            '&:hover': {
+              boxShadow: 'none'
+            }
           }}
         >
           Export
