@@ -43,9 +43,9 @@ function ThemeWrapper() {
         palette: {
           mode: mode as 'light' | 'dark',
           primary: {
-            main: mode === 'dark' ? '#4A5D5E' : '#687864',
-            light: mode === 'dark' ? '#5B7475' : '#8A9B8A',
-            dark: mode === 'dark' ? '#384748' : '#4C5A4C',
+            main: mode === 'dark' ? '#59bdd6' : '#3b7b8b',
+            light: mode === 'dark' ? '#59bdd6' : '#8A9B8A',
+            dark: mode === 'dark' ? '#384748' : '#3b7b8b',
             contrastText: '#FFFFFF',
           },
           secondary: {

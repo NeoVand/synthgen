@@ -53,6 +53,9 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import UploadIcon from '@mui/icons-material/Upload'
 import WarningIcon from '@mui/icons-material/Warning'
 
+// Import LlamaIndex components
+import { SentenceSplitter, MarkdownNodeParser, SentenceWindowNodeParser, Document } from "llamaindex";
+
 // PDFJS
 import * as PDFJS from 'pdfjs-dist'
 const { getDocument, GlobalWorkerOptions } = PDFJS;
@@ -145,7 +148,7 @@ function getSectionRegistry() {
 
 
 // Add type for chunking algorithms
-type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv';
+type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 
 // Add these new types and constants
 interface OllamaError {
@@ -247,6 +250,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   // States for chunking
   const [chunkSize, setChunkSize] = useState<number>(500)
   const [chunkOverlap, setChunkOverlap] = useState<number>(0)
+  const [windowSize, setWindowSize] = useState<number>(3)
   const [chunkingAlgorithm, setChunkingAlgorithm] = useState<ChunkingAlgorithm>('recursive')
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
@@ -331,6 +335,19 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
 
   useEffect(() => {
     if (isResizing) {
+      document.body.style.userSelect = 'none';
+      const preventDefault = (e: Event) => e.preventDefault();
+      document.addEventListener('selectstart', preventDefault);
+      
+      return () => {
+        document.body.style.userSelect = '';
+        document.removeEventListener('selectstart', preventDefault);
+      };
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     }
@@ -364,14 +381,23 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         textContent = await parsePdfFile(file)
       } else if (ext === 'docx') {
         textContent = await parseDocxFile(file)
+      } else if (ext === 'md') {
+        // For markdown files, we'll read them as plain text
+        // The markdown structure will be preserved and can be used by the markdown chunker
+        textContent = await file.text()
       } else {
-        // CSV or TXT
+        // CSV, TXT or other text files
         textContent = await file.text()
       }
       setRawText(textContent)
       // Clear existing summary & Q&A
       setDocSummary('')
       setQaPairs([])
+
+      // If it's a markdown file, automatically set the chunking algorithm to markdown-chunks
+      if (ext === 'md') {
+        setChunkingAlgorithm('markdown-chunks')
+      }
     } catch (err) {
       console.error('Error reading file:', err)
       alert('Could not read the uploaded file.')
@@ -519,6 +545,26 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         case 'line':
           // Split by newlines and filter out empty lines
           chunks = rawText.split('\n').filter(line => line.trim())
+          break;
+
+        case 'sentence-chunks':
+          const sentenceSplitter = new SentenceSplitter({
+            chunkSize: Math.floor(chunkSize / 4), // Convert characters to tokens (approx. 4 chars per token)
+            chunkOverlap: Math.floor(chunkOverlap / 4),
+          });
+          chunks = await sentenceSplitter.splitText(rawText);
+          break;
+
+        case 'markdown-chunks':
+          const markdownSplitter = new MarkdownNodeParser();
+          const mdNodes = markdownSplitter.getNodesFromDocuments([new Document({ text: rawText })]);
+          chunks = mdNodes.map(node => node.text);
+          break;
+
+        case 'rolling-sentence-chunks':
+          const windowSplitter = new SentenceWindowNodeParser({ windowSize });
+          const windowNodes = windowSplitter.getNodesFromDocuments([new Document({ text: rawText })]);
+          chunks = windowNodes.map(node => node.text);
           break;
 
         case 'csv-tsv':
@@ -1182,8 +1228,20 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   const toggleCellExpansion = useCallback((rowId: number, columnType: string) => {
     setExpandedCells(prev => {
       const newState = { ...prev };
-      const key = `${rowId}-${columnType}`;
-      newState[key] = !prev[key];
+      // Check if any cell in this row is expanded
+      const isAnyExpanded = ['context', 'question', 'answer'].some(
+        colType => prev[`${rowId}-${colType}`]
+      );
+
+      if (isAnyExpanded) {
+        // If any cell is expanded, collapse all cells in the row
+        ['context', 'question', 'answer'].forEach(colType => {
+          delete newState[`${rowId}-${colType}`];
+        });
+      } else {
+        // If no cell is expanded, expand the clicked cell
+        newState[`${rowId}-${columnType}`] = true;
+      }
       return newState;
     });
   }, []);
@@ -1534,6 +1592,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         display: 'flex', 
         alignItems: 'center',
         gap: 1,
+        maxWidth: 'fit-content',  // Prevent excessive width
       }}>
         <Tooltip title={currentIndex > 0 ? "Previous card" : "No previous card"}>
           <span>
@@ -1542,13 +1601,15 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               disabled={currentIndex <= 0}
               size="small"
               sx={{
+                width: 28,  // Reduced from default
+                height: 28,  // Reduced from default
                 bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
                 '&:hover': {
                   bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
                 },
               }}
             >
-              <NavigateBeforeIcon />
+              <NavigateBeforeIcon sx={{ fontSize: '1.25rem' }} />
             </IconButton>
           </span>
         </Tooltip>
@@ -1556,7 +1617,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center',
-          gap: 1,
+          gap: 0.75,  // Reduced gap
         }}>
           <TextField
             size="small"
@@ -1570,18 +1631,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             inputProps={{
               style: { 
                 textAlign: 'center',
-                padding: '4px 8px',
-                width: '40px'
+                padding: '2px 4px',  // Reduced padding
+                width: '32px',  // Reduced width
+                fontSize: '0.875rem'  // Slightly smaller font
               }
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
-                borderRadius: '6px',
-                fontSize: '0.875rem',
+                borderRadius: '4px',
               }
             }}
           />
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ 
+            fontSize: '0.875rem',  // Match input text size
+            userSelect: 'none'  // Prevent selection
+          }}>
             / {totalCards}
           </Typography>
         </Box>
@@ -1593,13 +1657,15 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               disabled={currentIndex >= totalCards - 1}
               size="small"
               sx={{
+                width: 28,  // Reduced from default
+                height: 28,  // Reduced from default
                 bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
                 '&:hover': {
                   bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
                 },
               }}
             >
-              <NavigateNextIcon />
+              <NavigateNextIcon sx={{ fontSize: '1.25rem' }} />
             </IconButton>
           </span>
         </Tooltip>
@@ -1820,18 +1886,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         <Box 
           sx={(theme) => ({ 
             width: isSidebarCollapsed ? 0 : `${sidebarWidth}px`,
-            minWidth: isSidebarCollapsed ? 0 : undefined,
-            maxWidth: isSidebarCollapsed ? 0 : undefined,
-            transition: isResizing ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            minWidth: isSidebarCollapsed ? 0 : `${sidebarWidth}px`,
+            maxWidth: isSidebarCollapsed ? 0 : `${sidebarWidth}px`,
+            transition: isResizing ? 'none' : theme.transitions.create(
+              ['width', 'min-width', 'max-width', 'opacity'],
+              { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+            ),
             position: 'relative',
             backgroundColor: theme.palette.mode === 'dark' ? '#1D1F21' : '#ECEAE5',
             borderRight: `1px solid ${theme.palette.divider}`,
             display: 'flex',
             flexDirection: 'column',
-            visibility: isSidebarCollapsed ? 'hidden' : 'visible',
             opacity: isSidebarCollapsed ? 0 : 1,
             overflow: 'hidden',
             flexShrink: 0,
+            pointerEvents: isSidebarCollapsed ? 'none' : 'auto',
           })}
         >
           {/* Sidebar Header */}
@@ -1944,7 +2013,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         '&:hover': {
                           bgcolor: theme.palette.mode === 'dark' 
                             ? 'rgba(255, 255, 255, 0.04)' 
-                            : 'rgba(0, 0, 0, 0.03)',
+                            : 'rgba(255, 255, 255, 0.2)',  // Reduced opacity from 0.6 to 0.2
                           boxShadow: 'none'
                         }
                       }} 
@@ -2016,7 +2085,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         '&:hover': {
                           bgcolor: theme.palette.mode === 'dark' 
                             ? 'rgba(255, 255, 255, 0.04)' 
-                            : 'rgba(0, 0, 0, 0.03)',
+                            : 'rgba(255, 255, 255, 0.2)',  // Reduced opacity from 0.6 to 0.2
                           boxShadow: 'none'
                         }
                       }}>
@@ -2024,7 +2093,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                         {section.id === 'section-upload' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
                             <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-                              Accepts .txt, .csv, .pdf, .docx
+                              Accepts .txt, .csv, .pdf, .docx, .md
                             </Typography>
                             <Button 
                               variant="contained" 
@@ -2036,7 +2105,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                               Choose File
                               <input
                                 type="file"
-                                accept=".pdf,.docx,.csv,.txt"
+                                accept=".pdf,.docx,.csv,.txt,.md"
                                 hidden
                                 onChange={handleFileUpload}
                               />
@@ -2244,7 +2313,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                   <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                                     Chunking Algorithm
                                   </Typography>
-                                  <Tooltip title="Choose how to split your document into chunks. 'Recursive' splits by character count, 'Line' splits by newlines, and 'CSV/TSV' treats the first line as a header and includes it with each chunk." placement="right">
+                                  <Tooltip title="Choose how to split your document into chunks. 'Sentence Chunks' splits by sentences and combines them into token-sized chunks. 'Markdown Chunks' splits by markdown headers. 'Rolling Sentence Chunks' creates overlapping chunks with surrounding context." placement="right">
                                     <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
                                       <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
                                     </IconButton>
@@ -2267,10 +2336,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                 <MenuItem value="recursive">Recursive Character Splitter</MenuItem>
                                 <MenuItem value="line">Line by Line</MenuItem>
                                 <MenuItem value="csv-tsv">CSV/TSV Parser</MenuItem>
+                                <MenuItem value="sentence-chunks">Sentence Chunks</MenuItem>
+                                <MenuItem value="markdown-chunks">Markdown Chunks</MenuItem>
+                                <MenuItem value="rolling-sentence-chunks">Rolling Sentence Chunks</MenuItem>
                               </TextField>
                             </Box>
 
-                            {chunkingAlgorithm === 'recursive' && (
+                            {(chunkingAlgorithm === 'recursive' || chunkingAlgorithm === 'sentence-chunks') && (
                               <>
                                 <Box sx={{ mb: 2 }}>
                                   <Box sx={{ 
@@ -2281,9 +2353,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                   }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                       <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                        Chunk Size
+                                        {chunkingAlgorithm === 'recursive' ? 'Chunk Size (characters)' : 'Chunk Size (tokens)'}
                                       </Typography>
-                                      <Tooltip title="The size of each text chunk in characters. Larger chunks provide more context but may be harder to process. Recommended range: 200-1000." placement="right">
+                                      <Tooltip title={chunkingAlgorithm === 'recursive' 
+                                        ? "The size of each text chunk in characters. Larger chunks provide more context but may be harder to process. Recommended range: 200-1000." 
+                                        : "The size of each text chunk in tokens (approx. 4 characters per token). Recommended range: 50-250."} 
+                                        placement="right">
                                         <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
                                           <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
                                         </IconButton>
@@ -2313,9 +2388,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                   }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                       <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                        Overlap
+                                        {chunkingAlgorithm === 'recursive' ? 'Overlap (characters)' : 'Overlap (tokens)'}
                                       </Typography>
-                                      <Tooltip title="The number of characters that overlap between consecutive chunks. This helps maintain context across chunk boundaries. Recommended: 10-20% of chunk size." placement="right">
+                                      <Tooltip title={chunkingAlgorithm === 'recursive'
+                                        ? "The number of characters that overlap between consecutive chunks. This helps maintain context across chunk boundaries. Recommended: 10-20% of chunk size."
+                                        : "The number of tokens that overlap between consecutive chunks. This helps maintain context across chunk boundaries. Recommended: 10-20% of chunk size."} 
+                                        placement="right">
                                         <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
                                           <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
                                         </IconButton>
@@ -2337,6 +2415,41 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                                   />
                                 </Box>
                               </>
+                            )}
+
+                            {chunkingAlgorithm === 'rolling-sentence-chunks' && (
+                              <Box sx={{ mb: 2 }}>
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  mb: 1 
+                                }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                      Window Size
+                                    </Typography>
+                                    <Tooltip title="The number of sentences to include before and after each sentence. A window size of 1 produces chunks with 3 sentences (1 before, current, 1 after). A window size of 2 produces chunks with 5 sentences (2 before, current, 2 after)." placement="right">
+                                      <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                        <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Box>
+                                </Box>
+                                <TextField
+                                  type="number"
+                                  fullWidth
+                                  value={windowSize}
+                                  onChange={(e) => setWindowSize(Number(e.target.value))}
+                                  className="no-drag"
+                                  sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                      borderRadius: '8px',
+                                      fontSize: '0.875rem'
+                                    }
+                                  }}
+                                />
+                              </Box>
                             )}
 
                             <Button
@@ -2376,6 +2489,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
             cursor: 'col-resize',
             zIndex: 2,
             visibility: isSidebarCollapsed ? 'hidden' : 'visible',
+            userSelect: 'none',
             '&:hover': {
               '&::after': {
                 content: '""',
@@ -2829,7 +2943,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       borderColor: theme.palette.divider,
                       padding: '12px 16px',
                       fontSize: '0.875rem',
-                      transition: 'background-color 0.2s ease',
+                      transition: 'all 0.2s ease',
                     },
                     '& .MuiTableHead-root .MuiTableCell-root': {
                       fontWeight: 600,
@@ -2964,119 +3078,138 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                       {qaPairs
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map((qa, rowIndex) => {
-                          // Get the maximum height for this row based on expanded cells
                           const isAnyExpanded = ['context', 'question', 'answer'].some(
                             columnType => expandedCells[`${qa.id}-${columnType}`] || isCellGenerating(qa, columnType)
                           );
 
                           return (
-                          <TableRow 
-                            key={qa.id}
-                            sx={{
-                              bgcolor: theme.palette.mode === 'dark'
-                                ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
-                                : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
-                              '&:hover': {
+                            <TableRow 
+                              key={qa.id}
+                              sx={{
                                 bgcolor: theme.palette.mode === 'dark'
+                                  ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
+                                  : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
+                                '&:hover': {
+                                  bgcolor: theme.palette.mode === 'dark'
+                                    ? 'rgba(255, 255, 255, 0.05)'
+                                    : 'rgba(0, 0, 0, 0.05)',
+                                },
+                                borderBottom: '1px solid',
+                                borderColor: theme.palette.mode === 'dark' 
                                   ? 'rgba(255, 255, 255, 0.05)'
                                   : 'rgba(0, 0, 0, 0.05)',
-                              },
-                              borderBottom: '1px solid',
-                              borderColor: theme.palette.mode === 'dark' 
-                                ? 'rgba(255, 255, 255, 0.05)'
-                                : 'rgba(0, 0, 0, 0.05)',
-                            }}
-                          >
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={!!qa.selected}
-                                onChange={(e) => {
-                                  setQaPairs((prev) =>
-                                    prev.map((row) =>
-                                      row.id === qa.id ? { ...row, selected: e.target.checked } : row
-                                    ),
-                                  );
-                                }}
-                              />
-                            </TableCell>
-                            {['context', 'question', 'answer'].map((columnType) => {
-                              const isGenerating = isCellGenerating(qa, columnType);
-                              const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGenerating;
-                              const content = qa[columnType as keyof typeof qa] as string;
-                              
-                              return (
-                                <TableCell 
-                                  key={columnType}
-                                  onClick={() => toggleCellExpansion(qa.id, columnType)}
-                                  sx={{ 
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    padding: '4px 8px',
-                                    minWidth: '200px',
-                                    maxWidth: '400px',
-                                    position: 'relative',
-                                    height: isAnyExpanded ? 'auto' : undefined,
-                                    '&:hover': {
-                                      backgroundColor: theme.palette.mode === 'dark' 
-                                        ? 'rgba(255, 255, 255, 0.04)'
-                                        : 'rgba(0, 0, 0, 0.02)',
-                                    },
+                              }}
+                            >
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  checked={!!qa.selected}
+                                  onChange={(e) => {
+                                    setQaPairs((prev) =>
+                                      prev.map((row) =>
+                                        row.id === qa.id ? { ...row, selected: e.target.checked } : row
+                                      ),
+                                    );
                                   }}
-                                >
-                                  <Box sx={{ 
-                                    position: 'relative',
-                                    maxHeight: isAnyExpanded ? (isExpanded ? 'none' : '100%') : '4.5em',
-                                    overflow: isExpanded ? 'visible' : 'auto',
-                                    transition: 'all 0.2s ease',
-                                    '&::-webkit-scrollbar': {
-                                      width: '4px',
-                                    },
-                                    '&::-webkit-scrollbar-thumb': {
-                                      backgroundColor: 'rgba(0,0,0,0.1)',
-                                      borderRadius: '2px',
-                                    },
-                                    // Force height reset when not expanded
-                                    height: isAnyExpanded ? (isExpanded ? 'auto' : '100%') : '4.5em',
-                                  }}>
-                                    <TextField
-                                      multiline
-                                      fullWidth
-                                      variant="standard"
-                                      value={content}
-                                      onChange={(e) => {
-                                        e.stopPropagation();
-                                        setQaPairs((prev) =>
-                                          prev.map((row) =>
-                                            row.id === qa.id ? { ...row, [columnType]: e.target.value } : row
-                                          )
-                                        )
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                      InputProps={{
-                                        disableUnderline: true,
-                                        sx: {
-                                          alignItems: 'flex-start',
-                                          padding: 0,
-                                          fontSize: '0.875rem',
-                                          lineHeight: 1.5,
-                                          minHeight: isExpanded ? 'auto' : '4.5em',
-                                          '& textarea': {
-                                            padding: 0,
-                                          }
+                                />
+                              </TableCell>
+                              {['context', 'question', 'answer'].map((columnType) => {
+                                const isGenerating = isCellGenerating(qa, columnType);
+                                const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGenerating;
+                                const content = qa[columnType as keyof typeof qa] as string;
+                                
+                                return (
+                                  <TableCell 
+                                    key={columnType}
+                                    onClick={() => toggleCellExpansion(qa.id, columnType)}
+                                    sx={{ 
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s ease',
+                                      padding: '12px 16px',
+                                      minWidth: '200px',
+                                      maxWidth: '400px',
+                                      position: 'relative',
+                                      height: isAnyExpanded ? 'auto' : undefined,
+                                      '&:hover': {
+                                        backgroundColor: theme.palette.mode === 'dark' 
+                                          ? 'rgba(255, 255, 255, 0.04)'
+                                          : 'rgba(0, 0, 0, 0.02)',
+                                      },
+                                      '&:focus-within': {
+                                        backgroundColor: theme.palette.mode === 'dark' 
+                                          ? 'rgba(0, 0, 0, 0.3)'
+                                          : 'rgba(255, 255, 255, 0.6)',
+                                      },
+                                    }}
+                                  >
+                                    <Box sx={{ 
+                                      position: 'relative',
+                                      maxHeight: isAnyExpanded ? (isExpanded ? 'none' : '100%') : '4.5em',
+                                      overflow: isExpanded ? 'visible' : 'auto',
+                                      transition: 'all 0.2s ease',
+                                      height: isAnyExpanded ? (isExpanded ? 'auto' : '100%') : '4.5em',
+                                      '&::-webkit-scrollbar': {
+                                        width: '8px',
+                                        height: '8px',
+                                        display: 'block'
+                                      },
+                                      '&::-webkit-scrollbar-track': {
+                                        background: 'transparent'
+                                      },
+                                      '&::-webkit-scrollbar-thumb': {
+                                        background: theme.palette.mode === 'dark' 
+                                          ? 'rgba(255, 255, 255, 0.1)' 
+                                          : 'rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '100px',
+                                        border: '2px solid transparent',
+                                        backgroundClip: 'padding-box',
+                                        '&:hover': {
+                                          background: theme.palette.mode === 'dark' 
+                                            ? 'rgba(255, 255, 255, 0.2)' 
+                                            : 'rgba(0, 0, 0, 0.2)',
                                         }
-                                      }}
-                                      sx={{
-                                        width: '100%',
-                                        '& .MuiInputBase-root': {
-                                          padding: 0,
-                                        },
-                                      }}
-                                    />
-                                  </Box>
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
+                                      },
+                                      overflowY: 'scroll'
+                                    }}>
+                                      <TextField
+                                        multiline
+                                        fullWidth
+                                        variant="standard"
+                                        value={content}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          setQaPairs((prev) =>
+                                            prev.map((row) =>
+                                              row.id === qa.id ? { ...row, [columnType]: e.target.value } : row
+                                            )
+                                          )
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        InputProps={{
+                                          disableUnderline: true,
+                                          sx: {
+                                            alignItems: 'flex-start',
+                                            padding: 0,
+                                            fontSize: '0.875rem',
+                                            lineHeight: 1.5,
+                                            minHeight: isExpanded ? 'auto' : '4.5em',
+                                            backgroundColor: 'transparent',
+                                            '& textarea': {
+                                              padding: 0,
+                                            }
+                                          }
+                                        }}
+                                        sx={{
+                                          width: '100%',
+                                          '& .MuiInputBase-root': {
+                                            padding: 0,
+                                          },
+                                        }}
+                                      />
+                                    </Box>
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
                           );
                         })}
                       {qaPairs.length === 0 && !isGenerating && (
@@ -3125,9 +3258,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
                     display: 'flex', 
                     justifyContent: 'center', 
                     alignItems: 'center',
-                    py: 2,
+                    py: 1.5,  // Reduced from py: 2
                     borderBottom: 1,
                     borderColor: theme.palette.divider,
+                    mx: 'auto',  // Center the box horizontally
+                    width: '100%',  // Take full width to ensure proper centering
                   }}>
                     <CardNavigation 
                       currentIndex={currentIndex}

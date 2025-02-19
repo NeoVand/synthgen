@@ -27,7 +27,7 @@ interface FlashcardViewProps {
   qaPairs: QAPair[];
   onUpdateQA: (updatedQA: QAPair) => void;
   currentIndex: number;
-  chunkingAlgorithm: 'recursive' | 'line' | 'csv-tsv';
+  chunkingAlgorithm: 'recursive' | 'line' | 'csv-tsv' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({
@@ -41,22 +41,72 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
   // Common text field styles
   const commonTextFieldStyles = {
-    lineHeight: 1.6,
-    '& textarea': {
+    width: '100%',
+    '& .MuiInputBase-root': {
       padding: 0,
+      '& textarea': {
+        padding: '12px',
+        minHeight: '100px',
+        overflow: 'auto',
+        '&::-webkit-scrollbar': {
+          width: '8px',
+          height: '8px'
+        },
+        '&::-webkit-scrollbar-track': {
+          background: 'transparent'
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: theme.palette.mode === 'dark' 
+            ? 'rgba(255, 255, 255, 0.1)' 
+            : 'rgba(0, 0, 0, 0.1)',
+          borderRadius: '100px',
+          border: '2px solid transparent',
+          backgroundClip: 'padding-box',
+          '&:hover': {
+            background: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.2)' 
+              : 'rgba(0, 0, 0, 0.2)',
+          }
+        }
+      }
+    }
+  };
+
+  // Common paper styles for all sections
+  const commonPaperStyles = {
+    p: 2,
+    bgcolor: theme.palette.background.paper,
+    borderRadius: 2,
+    border: `1px solid ${theme.palette.divider}`,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1.5,
+    transition: 'background-color 0.2s ease',
+    '&:focus-within': {
+      backgroundColor: theme.palette.mode === 'dark' 
+        ? 'rgba(0, 0, 0, 0.3)'
+        : 'rgba(255, 255, 255, 0.6)',
+    },
+  };
+
+  // Common text container styles
+
+  // Context text styles
+  const contextTextStyles = {
+    '& textarea': {
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      fontSize: '0.9rem',
+      lineHeight: 1.6,
     }
   };
 
   // Question and answer text styles
   const qaTextStyles = {
-    ...commonTextFieldStyles,
-    fontSize: '1.1rem',
-  };
-
-  // Context text styles
-  const contextTextStyles = {
-    ...commonTextFieldStyles,
-    fontSize: '0.9rem',
+    '& textarea': {
+      fontSize: '1.25rem',
+      lineHeight: 1.4,
+      fontFamily: 'var(--font-primary)',
+    }
   };
 
   // Common section header styles
@@ -64,7 +114,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     display: 'flex',
     alignItems: 'center',
     gap: 1,
-    mb: 1,
+    mb: 0.5,
     '& .MuiSvgIcon-root': {
       fontSize: '1.2rem',
     }
@@ -112,18 +162,39 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
       display: 'flex', 
       flexDirection: 'column', 
       height: '100%',
-      gap: 2,
-      p: 2 
+      overflow: 'hidden'
     }}>
       {/* Flashcard Content */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, overflow: 'auto' }}>
+      <Box sx={{ 
+        flex: 1,
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: 2,
+        p: 2,
+        overflow: 'auto',
+        '&::-webkit-scrollbar': {
+          width: '8px',
+          height: '8px'
+        },
+        '&::-webkit-scrollbar-track': {
+          background: 'transparent'
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: theme.palette.mode === 'dark' 
+            ? 'rgba(255, 255, 255, 0.1)' 
+            : 'rgba(0, 0, 0, 0.1)',
+          borderRadius: '100px',
+          border: '2px solid transparent',
+          backgroundClip: 'padding-box',
+          '&:hover': {
+            background: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.2)' 
+              : 'rgba(0, 0, 0, 0.2)',
+          }
+        }
+      }}>
         {/* Context Section */}
-        <Paper elevation={0} sx={{ 
-          p: 3,
-          bgcolor: theme.palette.background.paper,
-          borderRadius: 2,
-          border: `1px solid ${theme.palette.divider}`,
-        }}>
+        <Paper elevation={0} sx={commonPaperStyles}>
           <Box sx={contextHeaderStyles}>
             <ExtensionIcon />
             <Typography variant="overline" sx={{ 
@@ -138,7 +209,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
               fontSize: '0.9rem',
               lineHeight: 1.6,
-              mt: 1
+              mt: 1,
+              overflow: 'auto'
             }}>
               {(() => {
                 // Parse the context into key-value pairs
@@ -198,14 +270,20 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                         sx: {
                           fontSize: '0.9rem',
                           fontFamily: 'inherit',
-                          padding: '4px 8px',
+                          backgroundColor: 'transparent',
+                          transition: 'background-color 0.2s ease',
+                          borderRadius: 1,
+                          '&:focus-within': {
+                            backgroundColor: theme.palette.mode === 'dark' 
+                              ? 'rgba(0, 0, 0, 0.3)'
+                              : 'rgba(255, 255, 255, 0.6)',
+                          },
                           '& textarea': {
+                            padding: '4px 8px',
                             overflow: 'auto',
                             whiteSpace: 'pre-wrap',
                             wordWrap: 'break-word'
-                          },
-                          borderRadius: 1,
-                          minHeight: '24px'
+                          }
                         }
                       }}
                     />
@@ -223,8 +301,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               InputProps={{
                 disableUnderline: true,
                 sx: {
+                  ...commonTextFieldStyles,
                   ...contextTextStyles,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                 }
               }}
             />
@@ -232,12 +310,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
         </Paper>
 
         {/* Question Section */}
-        <Paper elevation={0} sx={{ 
-          p: 3,
-          bgcolor: theme.palette.background.paper,
-          borderRadius: 2,
-          border: `1px solid ${theme.palette.divider}`,
-        }}>
+        <Paper elevation={0} sx={commonPaperStyles}>
           <Box sx={questionHeaderStyles}>
             <HelpOutlineIcon />
             <Typography variant="overline" sx={{ 
@@ -256,21 +329,15 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             InputProps={{
               disableUnderline: true,
               sx: {
+                ...commonTextFieldStyles,
                 ...qaTextStyles,
-                fontWeight: 500,
-                fontFamily: 'var(--font-primary)',
               }
             }}
           />
         </Paper>
 
         {/* Answer Section */}
-        <Paper elevation={0} sx={{ 
-          p: 3,
-          bgcolor: theme.palette.background.paper,
-          borderRadius: 2,
-          border: `1px solid ${theme.palette.divider}`,
-        }}>
+        <Paper elevation={0} sx={commonPaperStyles}>
           <Box sx={answerHeaderStyles}>
             <LightbulbOutlinedIcon />
             <Typography variant="overline" sx={{ 
@@ -289,8 +356,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             InputProps={{
               disableUnderline: true,
               sx: {
+                ...commonTextFieldStyles,
                 ...qaTextStyles,
-                fontFamily: 'var(--font-primary)',
               }
             }}
           />
