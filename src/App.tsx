@@ -19,6 +19,9 @@ import {
   alpha,
   Tooltip,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
@@ -179,10 +182,57 @@ const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
 import { replacePlaceholders } from './config/promptTemplates';
 
 const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
+  const theme = useTheme();
+  
   // Add state for modal
   const [showConnectionModal, setShowConnectionModal] = useState<boolean>(false);
   const [ollamaError, setOllamaError] = useState<OllamaError | null>(null);
   const [isOllamaConnected, setIsOllamaConnected] = useState<boolean>(false);
+  const [showAboutDialog, setShowAboutDialog] = useState<boolean>(false);
+
+  // Add About dialog component
+  const AboutDialog = () => {
+    return (
+      <Dialog 
+        open={showAboutDialog} 
+        onClose={() => setShowAboutDialog(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            maxWidth: '400px',
+            bgcolor: theme.palette.mode === 'dark' ? '#1D1F21' : '#FFFFFF',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          pb: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          color: theme.palette.primary.main
+        }}>
+          <ScienceIcon sx={{ fontSize: '1.75rem' }} />
+          <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
+            Q&A Generator
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pt: '4px !important' }}>
+          <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+            A powerful tool for generating question-answer pairs from documents using local language models.
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Developed by{' '}
+            <Typography component="span" sx={{ 
+              color: theme.palette.primary.main,
+              fontWeight: 500
+            }}>
+              Neo Mohsenvand
+            </Typography>
+          </Typography>
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   // Add useEffect to check Ollama connection on mount
   useEffect(() => {
@@ -254,7 +304,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
   const [chunkingAlgorithm, setChunkingAlgorithm] = useState<ChunkingAlgorithm>('recursive')
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
-  const theme = useTheme();
 
   // Add state for expanded cells and sections
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -1916,11 +1965,23 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
               ? '#1A1C1E'
               : '#F5F2ED',
           })}>
-            <ScienceIcon sx={{ 
-              mr: 1.5, 
-              color: theme.palette.primary.main,
-              fontSize: '1.5rem' 
-            }} />
+            <IconButton
+              onClick={() => setShowAboutDialog(true)}
+              sx={{ 
+                p: 0.5,
+                mr: 1,
+                '&:hover': {
+                  bgcolor: theme.palette.mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.1)' 
+                    : 'rgba(0, 0, 0, 0.08)',
+                }
+              }}
+            >
+              <ScienceIcon sx={{ 
+                color: theme.palette.primary.main,
+                fontSize: '1.5rem' 
+              }} />
+            </IconButton>
             <Typography 
               variant="h6" 
               sx={{ 
@@ -3289,6 +3350,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }: AppProps) => {
         isConnected={isOllamaConnected}
         error={ollamaError?.message}
       />
+      <AboutDialog />
     </Box>
   );
 };
