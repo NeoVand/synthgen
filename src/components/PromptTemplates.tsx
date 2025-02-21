@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  DialogContentText,
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import SaveIcon from '@mui/icons-material/Save';
@@ -20,6 +21,9 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
+import WarningIcon from '@mui/icons-material/Warning';
+import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
 import { PromptTemplate, defaultTemplates, createCustomTemplate } from '../config/promptTemplates';
 
 interface PromptTemplatesProps {
@@ -587,31 +591,30 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
         }}
         PaperProps={{
           sx: {
-            borderRadius: 2,
-            bgcolor: theme.palette.mode === 'dark' 
-              ? alpha(theme.palette.background.paper, 0.8)
-              : alpha('#FFFFFF', 0.8),
-            backdropFilter: 'blur(20px)',
+            borderRadius: '12px',
+            width: '700px',
+            maxWidth: '90vw',
+            bgcolor: theme.palette.mode === 'dark' ? '#1D1F21' : '#FFFFFF',
           }
         }}
       >
         <DialogTitle sx={{ 
           pb: 1,
+          color: theme.palette.warning.main,
           display: 'flex',
           alignItems: 'center',
-          gap: 1,
+          gap: 1
         }}>
-          <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
-            {showNameInput ? 'Save as New Template' : dialogMode === 'switch' ? 'Unsaved Changes' : 'Save Template'}
-          </Typography>
+          <WarningIcon />
+          {showNameInput ? 'Save as New Template' : dialogMode === 'switch' ? 'Unsaved Changes' : 'Save Template'}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {showNameInput ? (
               <>
-                <Typography variant="body1">
+                <DialogContentText sx={{ color: 'text.secondary' }}>
                   Enter a name for the new template:
-                </Typography>
+                </DialogContentText>
                 <TextField
                   fullWidth
                   size="small"
@@ -628,28 +631,40 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
                 />
               </>
             ) : (
-              <Typography variant="body1">
+              <DialogContentText sx={{ color: 'text.secondary' }}>
                 {dialogMode === 'switch' 
                   ? 'You have unsaved changes. What would you like to do?'
                   : 'How would you like to save your changes?'}
-              </Typography>
+              </DialogContentText>
             )}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, display: 'flex', gap: 1 }}>
+        <DialogActions sx={{ 
+          px: 3, 
+          pb: 2, 
+          pt: 1,
+          display: 'flex',
+          gap: 1,
+          '& > button': {
+            flex: '1 0 auto',
+            minWidth: '100px',
+            fontSize: '0.875rem',
+            py: 0.75,
+          }
+        }}>
           {!showNameInput && dialogMode === 'switch' && (
             <Button
               onClick={() => handleDialogAction('discard')}
-              variant="outlined"
-              sx={{
-                borderRadius: 1,
-                textTransform: 'none',
-                px: 3,
-                borderColor: alpha(theme.palette.error.main, 0.5),
-                color: theme.palette.error.main,
+              startIcon={<CloseIcon sx={{ fontSize: '1.1rem' }} />}
+              sx={{ 
+                color: theme.palette.text.secondary,
+                borderColor: theme.palette.text.secondary,
+                border: '1px solid',
                 '&:hover': {
-                  borderColor: theme.palette.error.main,
-                  bgcolor: alpha(theme.palette.error.main, 0.04),
+                  bgcolor: theme.palette.mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.05)'
+                    : 'rgba(0, 0, 0, 0.05)',
+                  borderColor: theme.palette.text.primary,
                 }
               }}
             >
@@ -663,13 +678,14 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
                   setShowNameInput(false);
                   setNewTemplateName(generateNewName(editedTemplate?.name || ''));
                 }}
-                variant="outlined"
+                startIcon={<CloseIcon sx={{ fontSize: '1.1rem' }} />}
                 sx={{
                   borderRadius: 1,
                   textTransform: 'none',
-                  px: 3,
+                  px: 2,
                   borderColor: alpha(theme.palette.error.main, 0.5),
                   color: theme.palette.error.main,
+                  border: '1px solid',
                   '&:hover': {
                     borderColor: theme.palette.error.main,
                     bgcolor: alpha(theme.palette.error.main, 0.04),
@@ -680,12 +696,17 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
               </Button>
               <Button
                 onClick={handleSaveAsConfirm}
+                startIcon={<SaveIcon sx={{ fontSize: '1.1rem' }} />}
                 variant="contained"
                 disabled={!newTemplateName.trim()}
                 sx={{
                   borderRadius: 1,
                   textTransform: 'none',
-                  px: 3,
+                  px: 2,
+                  bgcolor: theme.palette.primary.main,
+                  '&:hover': {
+                    bgcolor: theme.palette.primary.dark,
+                  }
                 }}
               >
                 Save
@@ -695,13 +716,14 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
             <>
               <Button
                 onClick={() => handleDialogAction('overwrite')}
-                variant="outlined"
+                startIcon={<EditIcon sx={{ fontSize: '1.1rem' }} />}
                 sx={{
                   borderRadius: 1,
                   textTransform: 'none',
-                  px: 3,
+                  px: 2,
                   borderColor: alpha(theme.palette.warning.main, 0.5),
                   color: theme.palette.warning.main,
+                  border: '1px solid',
                   '&:hover': {
                     borderColor: theme.palette.warning.main,
                     bgcolor: alpha(theme.palette.warning.main, 0.04),
@@ -712,12 +734,16 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({
               </Button>
               <Button
                 onClick={() => handleDialogAction('saveAs')}
+                startIcon={<AddIcon sx={{ fontSize: '1.1rem' }} />}
                 variant="contained"
                 sx={{
                   borderRadius: 1,
                   textTransform: 'none',
-                  px: 3,
+                  px: 2,
                   bgcolor: theme.palette.primary.main,
+                  '&:hover': {
+                    bgcolor: theme.palette.primary.dark,
+                  }
                 }}
               >
                 Save as New Template
