@@ -2938,29 +2938,33 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                       ? 'rgba(255, 255, 255, 0.15)'
                       : 'rgba(0, 0, 0, 0.15)',
                   }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={handleViewModeToggle}
-                      startIcon={isTableView(viewMode) ? <StyleIcon /> : <ViewColumnIcon />}
-                      sx={{
-                        height: 26,  // Reduced from 32
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        fontSize: '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: 0,
-                        px: 1.5,
-                        color: theme.palette.text.primary,
-                        '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.05)'
-                            : 'rgba(0, 0, 0, 0.05)',
-                        }
-                      }}
-                    >
-                      {isTableView(viewMode) ? 'Cards' : 'Table'}
-                    </Button>
+                    <Tooltip title={isTableView(viewMode) ? 
+                      "Switch to card view. If items are selected, the first selected card will be shown." : 
+                      "Switch to table view to see all items in a list"}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={handleViewModeToggle}
+                        startIcon={isTableView(viewMode) ? <StyleIcon /> : <ViewColumnIcon />}
+                        sx={{
+                          height: 26,
+                          textTransform: 'none',
+                          fontWeight: 500,
+                          fontSize: '0.875rem',
+                          borderRadius: '4px',
+                          minWidth: 0,
+                          px: 1.5,
+                          color: theme.palette.text.primary,
+                          '&:hover': {
+                            bgcolor: theme.palette.mode === 'dark' 
+                              ? 'rgba(255, 255, 255, 0.05)'
+                              : 'rgba(0, 0, 0, 0.05)',
+                          }
+                        }}
+                      >
+                        {isTableView(viewMode) ? 'Cards' : 'Table'}
+                      </Button>
+                    </Tooltip>
                   </Box>
 
                   {/* Generation actions group */}
@@ -2974,120 +2978,144 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                       ? 'rgba(255, 255, 255, 0.15)'
                       : 'rgba(0, 0, 0, 0.15)',
                   }}>
-                    <Button
-                      variant={isGenerating && generationType === 'qa' ? "contained" : "text"}
-                      color={isGenerating && generationType === 'qa' ? "error" : "primary"}
-                      startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
-                      onClick={isFlashcardView(viewMode) ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerateQA}
-                      disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'qa')}
-                      sx={{
-                        height: 26,  // Reduced from 32
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        fontSize: isGenerating && generationType === 'qa' ? '0.75rem' : '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: isGenerating && generationType === 'qa' ? 130 : 0,
-                        px: 1.5,
-                        color: isGenerating && generationType === 'qa' 
-                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // Keep stop state colors
-                          : theme.palette.mode === 'dark' 
-                            ? '#90CAF9'  // Bright blue for dark mode
-                            : '#2196F3',  // Bright blue for light mode
-                        bgcolor: isGenerating && generationType === 'qa'
-                          ? undefined  // Keep stop state background
-                          : 'transparent',  // No initial background
-                        '&:hover': {
-                          bgcolor: isGenerating && generationType === 'qa'
-                            ? theme.palette.error.dark  // Keep stop state hover
-                            : theme.palette.mode === 'dark' 
-                              ? alpha('#90CAF9', 0.2)  // Brighter blue hover in dark mode
-                              : alpha('#2196F3', 0.15),  // Brighter blue hover in light mode
-                        },
-                        '& .MuiSvgIcon-root': {
-                          color: 'inherit'
-                        }
-                      }}
-                    >
-                      {isGenerating && generationType === 'qa' 
-                        ? `Stop (${generationProgress.completed}/${generationProgress.total})`
-                        : 'Q&A'}
-                    </Button>
+                    <Tooltip title={isGenerating && generationType === 'qa' ? 
+                      "Stop the current Q&A generation" :
+                      isFlashcardView(viewMode) ? 
+                        "Generate both question and answer for the current card" :
+                        "Generate questions and answers for all selected items"}>
+                      <span>
+                        <Button
+                          variant={isGenerating && generationType === 'qa' ? "contained" : "text"}
+                          color={isGenerating && generationType === 'qa' ? "error" : "primary"}
+                          startIcon={isGenerating && generationType === 'qa' ? <StopIcon /> : <AutoAwesomeIcon />}
+                          onClick={isFlashcardView(viewMode) ? () => handleSingleCardGenerate(qaPairs[currentIndex].id) : handleGenerateQA}
+                          disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'qa')}
+                          sx={{
+                            height: 26,  // Reduced from 32
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            fontSize: isGenerating && generationType === 'qa' ? '0.75rem' : '0.875rem',
+                            borderRadius: '4px',
+                            minWidth: isGenerating && generationType === 'qa' ? 130 : 0,
+                            px: 1.5,
+                            color: isGenerating && generationType === 'qa' 
+                              ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // Keep stop state colors
+                              : theme.palette.mode === 'dark' 
+                                ? '#90CAF9'  // Bright blue for dark mode
+                                : '#2196F3',  // Bright blue for light mode
+                            bgcolor: isGenerating && generationType === 'qa'
+                              ? undefined  // Keep stop state background
+                              : 'transparent',  // No initial background
+                            '&:hover': {
+                              bgcolor: isGenerating && generationType === 'qa'
+                                ? theme.palette.error.dark  // Keep stop state hover
+                                : theme.palette.mode === 'dark' 
+                                  ? alpha('#90CAF9', 0.2)  // Brighter blue hover in dark mode
+                                  : alpha('#2196F3', 0.15),  // Brighter blue hover in light mode
+                            },
+                            '& .MuiSvgIcon-root': {
+                              color: 'inherit'
+                            }
+                          }}
+                        >
+                          {isGenerating && generationType === 'qa' 
+                            ? `Stop (${generationProgress.completed}/${generationProgress.total})`
+                            : 'Q&A'}
+                        </Button>
+                      </span>
+                    </Tooltip>
 
-                    <Button
-                      variant={isGenerating && generationType === 'question' ? "contained" : "text"}
-                      color={isGenerating && generationType === 'question' ? "error" : "secondary"}
-                      startIcon={isGenerating && generationType === 'question' ? <StopIcon /> : <HelpOutlineIcon />}
-                      onClick={isFlashcardView(viewMode) 
-                        ? () => handleSingleCardGenerateQuestion(qaPairs[currentIndex].id) 
-                        : handleGenerateQuestion}
-                      disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'question')}
-                      sx={{
-                        height: 26,  // Reduced from 32
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        fontSize: isGenerating && generationType === 'question' ? '0.75rem' : '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: isGenerating && generationType === 'question' ? 130 : 0,
-                        px: 1.5,
-                        color: isGenerating && generationType === 'question'
-                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
-                          : theme.palette.mode === 'dark' 
-                            ? theme.palette.secondary.light
-                            : theme.palette.secondary.dark,
-                        '&:hover': {
-                          bgcolor: isGenerating && generationType === 'question'
-                            ? theme.palette.error.dark  // Darker red when hovering in stop state
-                            : theme.palette.mode === 'dark' 
-                              ? alpha(theme.palette.secondary.main, 0.15)
-                              : alpha(theme.palette.secondary.main, 0.12),
-                        },
-                        '& .MuiSvgIcon-root': {
-                          color: 'inherit'
-                        }
-                      }}
-                    >
-                      {isGenerating && generationType === 'question' 
-                        ? `Stop (${generationProgress.completed}/${generationProgress.total})`
-                        : 'Question'}
-                    </Button>
+                    <Tooltip title={isGenerating && generationType === 'question' ? 
+                      "Stop the current question generation" :
+                      isFlashcardView(viewMode) ? 
+                        "Generate a question for the current card" :
+                        "Generate questions for all selected items"}>
+                      <span>
+                        <Button
+                          variant={isGenerating && generationType === 'question' ? "contained" : "text"}
+                          color={isGenerating && generationType === 'question' ? "error" : "secondary"}
+                          startIcon={isGenerating && generationType === 'question' ? <StopIcon /> : <HelpOutlineIcon />}
+                          onClick={isFlashcardView(viewMode) 
+                            ? () => handleSingleCardGenerateQuestion(qaPairs[currentIndex].id) 
+                            : handleGenerateQuestion}
+                          disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'question')}
+                          sx={{
+                            height: 26,  // Reduced from 32
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            fontSize: isGenerating && generationType === 'question' ? '0.75rem' : '0.875rem',
+                            borderRadius: '4px',
+                            minWidth: isGenerating && generationType === 'question' ? 130 : 0,
+                            px: 1.5,
+                            color: isGenerating && generationType === 'question'
+                              ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
+                              : theme.palette.mode === 'dark' 
+                                ? theme.palette.secondary.light
+                                : theme.palette.secondary.dark,
+                            '&:hover': {
+                              bgcolor: isGenerating && generationType === 'question'
+                                ? theme.palette.error.dark  // Darker red when hovering in stop state
+                                : theme.palette.mode === 'dark' 
+                                  ? alpha(theme.palette.secondary.main, 0.15)
+                                  : alpha(theme.palette.secondary.main, 0.12),
+                            },
+                            '& .MuiSvgIcon-root': {
+                              color: 'inherit'
+                            }
+                          }}
+                        >
+                          {isGenerating && generationType === 'question' 
+                            ? `Stop (${generationProgress.completed}/${generationProgress.total})`
+                            : 'Question'}
+                        </Button>
+                      </span>
+                    </Tooltip>
 
-                    <Button
-                      variant={isGenerating && generationType === 'answer' ? "contained" : "text"}
-                      color={isGenerating && generationType === 'answer' ? "error" : "success"}
-                      startIcon={isGenerating && generationType === 'answer' ? <StopIcon /> : <LightbulbOutlinedIcon />}
-                      onClick={isFlashcardView(viewMode) 
-                        ? () => handleSingleCardGenerateAnswer(qaPairs[currentIndex].id) 
-                        : handleGenerateAnswer}
-                      disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'answer')}
-                      sx={{
-                        height: 26,  // Reduced from 32
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        fontSize: isGenerating && generationType === 'answer' ? '0.75rem' : '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: isGenerating && generationType === 'answer' ? 130 : 0,
-                        px: 1.5,
-                        color: isGenerating && generationType === 'answer'
-                          ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
-                          : theme.palette.mode === 'dark' 
-                            ? theme.palette.success.light
-                            : theme.palette.success.dark,
-                        '&:hover': {
-                          bgcolor: isGenerating && generationType === 'answer'
-                            ? theme.palette.error.dark  // Darker red when hovering in stop state
-                            : theme.palette.mode === 'dark' 
-                              ? alpha(theme.palette.success.main, 0.15)
-                              : alpha(theme.palette.success.main, 0.12),
-                        },
-                        '& .MuiSvgIcon-root': {
-                          color: 'inherit'
-                        }
-                      }}
-                    >
-                      {isGenerating && generationType === 'answer' 
-                        ? `Stop (${generationProgress.completed}/${generationProgress.total})`
-                        : 'Answer'}
-                    </Button>
+                    <Tooltip title={isGenerating && generationType === 'answer' ? 
+                      "Stop the current answer generation" :
+                      isFlashcardView(viewMode) ? 
+                        "Generate an answer for the current card" :
+                        "Generate answers for all selected items"}>
+                      <span>
+                        <Button
+                          variant={isGenerating && generationType === 'answer' ? "contained" : "text"}
+                          color={isGenerating && generationType === 'answer' ? "error" : "success"}
+                          startIcon={isGenerating && generationType === 'answer' ? <StopIcon /> : <LightbulbOutlinedIcon />}
+                          onClick={isFlashcardView(viewMode) 
+                            ? () => handleSingleCardGenerateAnswer(qaPairs[currentIndex].id) 
+                            : handleGenerateAnswer}
+                          disabled={!ollamaSettings.model || qaPairs.length === 0 || (isGenerating && generationType !== 'answer')}
+                          sx={{
+                            height: 26,  // Reduced from 32
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            fontSize: isGenerating && generationType === 'answer' ? '0.75rem' : '0.875rem',
+                            borderRadius: '4px',
+                            minWidth: isGenerating && generationType === 'answer' ? 130 : 0,
+                            px: 1.5,
+                            color: isGenerating && generationType === 'answer'
+                              ? theme.palette.mode === 'dark' ? '#fff' : '#000'  // White in dark mode, black in light mode for stop state
+                              : theme.palette.mode === 'dark' 
+                                ? theme.palette.success.light
+                                : theme.palette.success.dark,
+                            '&:hover': {
+                              bgcolor: isGenerating && generationType === 'answer'
+                                ? theme.palette.error.dark  // Darker red when hovering in stop state
+                                : theme.palette.mode === 'dark' 
+                                  ? alpha(theme.palette.success.main, 0.15)
+                                  : alpha(theme.palette.success.main, 0.12),
+                            },
+                            '& .MuiSvgIcon-root': {
+                              color: 'inherit'
+                            }
+                          }}
+                        >
+                          {isGenerating && generationType === 'answer' 
+                            ? `Stop (${generationProgress.completed}/${generationProgress.total})`
+                            : 'Answer'}
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Box>
 
                   {/* Row editing actions group */}
@@ -3101,98 +3129,112 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                       ? 'rgba(255, 255, 255, 0.15)'
                       : 'rgba(0, 0, 0, 0.15)',
                   }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={handleAddEmpty}
-                      startIcon={<AddIcon />}
-                      sx={{
-                        height: 26,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        fontSize: '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: 0,
-                        px: 1.5,
-                        color: theme.palette.mode === 'dark' 
-                          ? '#90CAF9'  // Bright blue for dark mode
-                          : '#2196F3',  // Bright blue for light mode
-                        '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha('#90CAF9', 0.15)
-                            : alpha('#2196F3', 0.08)
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
+                    <Tooltip title="Add a new empty row. If items are selected, adds after the last selected item">
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={handleAddEmpty}
+                        startIcon={<AddIcon />}
+                        sx={{
+                          height: 26,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.875rem',
+                          borderRadius: '4px',
+                          minWidth: 0,
+                          px: 1.5,
+                          color: theme.palette.mode === 'dark' 
+                            ? '#90CAF9'  // Bright blue for dark mode
+                            : '#2196F3',  // Bright blue for light mode
+                          '&:hover': {
+                            bgcolor: theme.palette.mode === 'dark' 
+                              ? alpha('#90CAF9', 0.15)
+                              : alpha('#2196F3', 0.08)
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </Tooltip>
 
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={handleDuplicate}
-                      disabled={isTableView(viewMode) ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
-                      startIcon={<ContentCopyIcon />}
-                      sx={{
-                        height: 26,
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        fontSize: '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: 0,
-                        px: 1.5,
-                        color: theme.palette.mode === 'dark' 
-                          ? theme.palette.warning.light
-                          : theme.palette.warning.main,
-                        '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha(theme.palette.warning.main, 0.15)
-                            : alpha(theme.palette.warning.main, 0.08)
-                        },
-                        '&.Mui-disabled': {
-                          color: theme.palette.mode === 'dark'
-                            ? alpha(theme.palette.warning.light, 0.3)
-                            : alpha(theme.palette.warning.main, 0.3)
-                        }
-                      }}
-                    >
-                      Duplicate
-                    </Button>
+                    <Tooltip title={isTableView(viewMode) ? 
+                      "Duplicate selected items" : 
+                      "Duplicate current card"}>
+                      <span>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={handleDuplicate}
+                          disabled={isTableView(viewMode) ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
+                          startIcon={<ContentCopyIcon />}
+                          sx={{
+                            height: 26,
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            fontSize: '0.875rem',
+                            borderRadius: '4px',
+                            minWidth: 0,
+                            px: 1.5,
+                            color: theme.palette.mode === 'dark' 
+                              ? theme.palette.warning.light
+                              : theme.palette.warning.main,
+                            '&:hover': {
+                              bgcolor: theme.palette.mode === 'dark' 
+                                ? alpha(theme.palette.warning.main, 0.15)
+                                : alpha(theme.palette.warning.main, 0.08)
+                            },
+                            '&.Mui-disabled': {
+                              color: theme.palette.mode === 'dark'
+                                ? alpha(theme.palette.warning.light, 0.3)
+                                : alpha(theme.palette.warning.main, 0.3)
+                            }
+                          }}
+                        >
+                          Duplicate
+                        </Button>
+                      </span>
+                    </Tooltip>
 
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={handleDeleteSelected}
-                      disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
-                      startIcon={<DeleteIcon />}
-                      sx={{
-                        height: 26,
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        fontSize: '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: 0,
-                        px: 1.5,
-                        color: theme.palette.mode === 'dark' 
-                          ? theme.palette.error.light
-                          : theme.palette.error.main,
-                        '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? alpha(theme.palette.error.main, 0.15)
-                            : alpha(theme.palette.error.main, 0.08)
-                        },
-                        '&.Mui-disabled': {
-                          color: theme.palette.mode === 'dark'
-                            ? alpha(theme.palette.error.light, 0.3)
-                            : alpha(theme.palette.error.main, 0.3)
-                        },
-                        '& .MuiSvgIcon-root': {
-                          color: 'inherit'
-                        }
-                      }}
-                    >
-                      Delete
-                    </Button>
+                    <Tooltip title={isTableView(viewMode) ? 
+                      "Delete selected items" : 
+                      "Delete current card"}>
+                      <span>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={handleDeleteSelected}
+                          disabled={viewMode === 'table' ? !qaPairs.some(qa => qa.selected) : qaPairs.length === 0}
+                          startIcon={<DeleteIcon />}
+                          sx={{
+                            height: 26,
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            fontSize: '0.875rem',
+                            borderRadius: '4px',
+                            minWidth: 0,
+                            px: 1.5,
+                            color: theme.palette.mode === 'dark' 
+                              ? theme.palette.error.light
+                              : theme.palette.error.main,
+                            '&:hover': {
+                              bgcolor: theme.palette.mode === 'dark' 
+                                ? alpha(theme.palette.error.main, 0.15)
+                                : alpha(theme.palette.error.main, 0.08)
+                            },
+                            '&.Mui-disabled': {
+                              color: theme.palette.mode === 'dark'
+                                ? alpha(theme.palette.error.light, 0.3)
+                                : alpha(theme.palette.error.main, 0.3)
+                            },
+                            '& .MuiSvgIcon-root': {
+                              color: 'inherit'
+                            }
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Box>
                 </Box>
 
@@ -3208,79 +3250,87 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                       ? 'rgba(255, 255, 255, 0.15)'
                       : 'rgba(0, 0, 0, 0.15)',
                   }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => {
-                        fileInputRef.current?.click();
-                      }}
-                      startIcon={<UploadIcon />}
-                      sx={{
-                        height: 26,  // Added to match other button group
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        fontSize: '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: 0,
-                        px: 1.5,
-                        color: theme.palette.text.primary,
-                        '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.05)'
-                            : 'rgba(0, 0, 0, 0.05)',
-                        }
-                      }}
-                    >
-                      Import
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".csv"
-                        style={{ display: 'none' }}
-                        onChange={handleImportCSV}
-                      />
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={handleExportCSV}
-                      disabled={qaPairs.length === 0}
-                      startIcon={<SaveAltIcon />}
-                      sx={{
-                        height: 26,  // Added to match other button group
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        fontSize: '0.875rem',
-                        borderRadius: '4px',
-                        minWidth: 0,
-                        px: 1.5,
-                        color: theme.palette.text.primary,
-                        '&:hover': {
-                          bgcolor: theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.05)'
-                            : 'rgba(0, 0, 0, 0.05)',
-                        }
-                      }}
-                    >
-                      Export
-                    </Button>
+                    <Tooltip title="Import a CSV file. You can choose to replace all existing items or append to them">
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                        }}
+                        startIcon={<UploadIcon />}
+                        sx={{
+                          height: 26,
+                          textTransform: 'none',
+                          fontWeight: 500,
+                          fontSize: '0.875rem',
+                          borderRadius: '4px',
+                          minWidth: 0,
+                          px: 1.5,
+                          color: theme.palette.text.primary,
+                          '&:hover': {
+                            bgcolor: theme.palette.mode === 'dark' 
+                              ? 'rgba(255, 255, 255, 0.05)'
+                              : 'rgba(0, 0, 0, 0.05)',
+                          }
+                        }}
+                      >
+                        Import
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".csv"
+                          style={{ display: 'none' }}
+                          onChange={handleImportCSV}
+                        />
+                      </Button>
+                    </Tooltip>
+                    <Tooltip title="Export all Q&A pairs to a CSV file that can be imported later">
+                      <span>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={handleExportCSV}
+                          disabled={qaPairs.length === 0}
+                          startIcon={<SaveAltIcon />}
+                          sx={{
+                            height: 26,
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            fontSize: '0.875rem',
+                            borderRadius: '4px',
+                            minWidth: 0,
+                            px: 1.5,
+                            color: theme.palette.text.primary,
+                            '&:hover': {
+                              bgcolor: theme.palette.mode === 'dark' 
+                                ? 'rgba(255, 255, 255, 0.05)'
+                                : 'rgba(0, 0, 0, 0.05)',
+                            }
+                          }}
+                        >
+                          Export
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Box>
-                  <IconButton
-                    size="small"
-                    onClick={onThemeChange}
-                    sx={{
-                      width: 34,
-                      height: 34,
-                      color: theme.palette.text.secondary,
-                      '&:hover': {
-                        bgcolor: theme.palette.mode === 'dark' 
-                          ? 'rgba(255, 255, 255, 0.1)' 
-                          : 'rgba(0, 0, 0, 0.08)',
-                      }
-                    }}
-                  >
-                    {theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-                  </IconButton>
+                  <Tooltip title={`Switch to ${theme.palette.mode === 'dark' ? 'light' : 'dark'} mode`}>
+                    <IconButton
+                      size="small"
+                      onClick={onThemeChange}
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        color: theme.palette.text.secondary,
+                        '&:hover': {
+                          bgcolor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.1)' 
+                            : 'rgba(0, 0, 0, 0.08)',
+                        }
+                      }}
+                    >
+                      {theme.palette.mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                    </IconButton>
+                  </Tooltip>
                 </Box>
               </Box>
             </Box>
