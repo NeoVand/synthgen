@@ -310,6 +310,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [windowSize, setWindowSize] = useState<number>(3)
   const [chunkingAlgorithm, setChunkingAlgorithm] = useState<ChunkingAlgorithm>('recursive')
 
+  // Add state for CSV columns
+  const [csvColumns, setCsvColumns] = useState<{name: string; selected: boolean}[]>([])
+  const [csvData, setCsvData] = useState<string[][]>([])
+
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
 
   // Add state for expanded cells and sections
@@ -441,6 +445,26 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         // For markdown files, we'll read them as plain text
         // The markdown structure will be preserved and can be used by the markdown chunker
         textContent = await file.text()
+      } else if (ext === 'csv' || ext === 'tsv') {
+        // For CSV/TSV files, we'll store the raw content and parse columns
+        textContent = await file.text()
+        const delimiter = textContent.includes('\t') ? '\t' : ','
+        
+        // Parse the first row to get column names
+        const firstRow = textContent.split('\n')[0]
+        const columnNames = firstRow.split(delimiter).map(col => col.trim().replace(/^["']|["']$/g, ''))
+        
+        // Set initial column selection state (all selected by default)
+        setCsvColumns(columnNames.map(name => ({ name, selected: true })))
+        
+        // Store the raw data for later processing
+        const rows = textContent.split('\n').map(row => 
+          row.split(delimiter).map(cell => cell.trim().replace(/^["']|["']$/g, ''))
+        )
+        setCsvData(rows)
+        
+        // Set chunking algorithm to CSV/TSV
+        setChunkingAlgorithm('csv-tsv')
       } else {
         // CSV, TXT or other text files
         textContent = await file.text()
@@ -622,87 +646,30 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
         case 'csv-tsv':
           try {
-            // First determine if it's TSV by checking for tabs
-            const delimiter = rawText.includes('\t') ? '\t' : ',';
-            
-            // Function to parse CSV/TSV properly handling quotes and escapes
-            const parseCSV = (text: string): string[][] => {
-              const rows: string[][] = [];
-              let currentRow: string[] = [];
-              let currentField = '';
-              let insideQuotes = false;
-              
-              for (let i = 0; i < text.length; i++) {
-                const char = text[i];
-                const nextChar = text[i + 1];
-                
-                if (char === '"') {
-                  if (insideQuotes && nextChar === '"') {
-                    // Handle escaped quote
-                    currentField += '"';
-                    i++; // Skip next quote
-                  } else {
-                    // Toggle quote state
-                    insideQuotes = !insideQuotes;
-                  }
-                } else if (char === delimiter && !insideQuotes) {
-                  // End of field - clean up any newlines in the field
-                  currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
-                  currentField = '';
-                } else if (char === '\n' && !insideQuotes) {
-                  // End of row - clean up any newlines in the last field
-                  currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
-                  if (currentRow.some(field => field.length > 0)) {
-                    rows.push(currentRow);
-                  }
-                  currentRow = [];
-                  currentField = '';
-                } else if (char === '\r') {
-                  // Ignore carriage returns
-                  continue;
-                } else {
-                  // If we're inside quotes and hit a newline, replace with space
-                  if (insideQuotes && (char === '\n' || char === '\r')) {
-                    currentField += ' ';
-                  } else {
-                    currentField += char;
-                  }
-                }
-              }
-              
-              // Handle last field and row
-              if (currentField || currentRow.length > 0) {
-                currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
-                if (currentRow.some(field => field.length > 0)) {
-                  rows.push(currentRow);
-                }
-              }
-              
-              return rows;
-            };
-
-            // Parse the CSV/TSV content
-            const rows = parseCSV(rawText);
-            
-            if (rows.length < 2) {
+            if (csvData.length < 2) {
               throw new Error('CSV/TSV must have at least a header row and one data row');
             }
 
-            // Get headers (first row)
-            const headers = rows[0].map(header => header.trim());
-            
+            // Get headers and their indices
+            const headers = csvData[0];
+            const selectedColumns = csvColumns
+              .map((col, index) => ({ name: col.name, index, selected: col.selected }))
+              .filter(col => col.selected);
+
+            if (selectedColumns.length === 0) {
+              throw new Error('Please select at least one column to include');
+            }
+
             // Process each data row into a formatted string
-            chunks = rows.slice(1).map(row => {
-              // Ensure row has same number of columns as header
-              while (row.length < headers.length) row.push('');
-              
-              return headers.map((header, index) => {
-                const value = row[index];
-                // Only include non-empty values
-                return value ? `${header}: ${value}` : null;
-              })
-              .filter(Boolean) // Remove null entries
-              .join('\n');
+            chunks = csvData.slice(1).map(row => {
+              return selectedColumns
+                .map(col => {
+                  const value = row[col.index];
+                  // Only include non-empty values
+                  return value ? `${col.name}: ${value}` : null;
+                })
+                .filter(Boolean) // Remove null entries
+                .join('\n');
             })
             .filter(chunk => chunk.trim().length > 0); // Remove empty chunks
           } catch (err) {
@@ -2814,6 +2781,111 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                                     }
                                   }}
                                 />
+                              </Box>
+                            )}
+
+                            {chunkingAlgorithm === 'csv-tsv' && (
+                              <Box sx={{ mb: 2 }}>
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  mb: 1 
+                                }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                      CSV/TSV Columns
+                                    </Typography>
+                                    <Tooltip title="Select which columns to include in the chunks. Each chunk will contain the selected columns from one row." placement="right">
+                                      <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                        <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Box>
+                                </Box>
+                                <Paper variant="outlined" sx={{ 
+                                  p: 1.5,
+                                  borderRadius: '8px',
+                                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                                  border: '1px solid',
+                                  borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                                }}>
+                                  {csvColumns.length > 0 ? (
+                                    <Box sx={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: 1,
+                                      maxHeight: '200px',
+                                      overflowY: 'auto',
+                                      '&::-webkit-scrollbar': {
+                                        width: '8px',
+                                      },
+                                      '&::-webkit-scrollbar-track': {
+                                        background: 'transparent',
+                                      },
+                                      '&::-webkit-scrollbar-thumb': {
+                                        background: theme.palette.mode === 'dark' 
+                                          ? 'rgba(255, 255, 255, 0.1)' 
+                                          : 'rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '4px',
+                                      },
+                                    }}>
+                                      {csvColumns.map((column, index) => (
+                                        <Box 
+                                          key={column.name} 
+                                          sx={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center',
+                                            p: 0.5,
+                                            borderRadius: '4px',
+                                            '&:hover': {
+                                              bgcolor: theme.palette.mode === 'dark' 
+                                                ? 'rgba(255, 255, 255, 0.05)' 
+                                                : 'rgba(0, 0, 0, 0.05)',
+                                            }
+                                          }}
+                                        >
+                                          <Checkbox
+                                            size="small"
+                                            checked={column.selected}
+                                            onChange={(e) => {
+                                              const newColumns = [...csvColumns];
+                                              newColumns[index] = { ...column, selected: e.target.checked };
+                                              setCsvColumns(newColumns);
+                                            }}
+                                            sx={{
+                                              p: 0.5,
+                                              color: theme.palette.mode === 'dark' 
+                                                ? alpha(theme.palette.common.white, 0.3)
+                                                : alpha(theme.palette.common.black, 0.2),
+                                              '&.Mui-checked': {
+                                                color: theme.palette.primary.main,
+                                              },
+                                            }}
+                                          />
+                                          <Typography 
+                                            variant="body2" 
+                                            sx={{ 
+                                              ml: 1,
+                                              fontSize: '0.875rem',
+                                              color: theme.palette.text.primary,
+                                              flexGrow: 1,
+                                              overflow: 'hidden',
+                                              textOverflow: 'ellipsis',
+                                              whiteSpace: 'nowrap'
+                                            }}
+                                          >
+                                            {column.name}
+                                          </Typography>
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                                      Upload a CSV/TSV file to see columns
+                                    </Typography>
+                                  )}
+                                </Paper>
                               </Box>
                             )}
 
