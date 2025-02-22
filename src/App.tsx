@@ -650,8 +650,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
               throw new Error('CSV/TSV must have at least a header row and one data row');
             }
 
-            // Get headers and their indices
-            const headers = csvData[0];
+            // Get selected columns and their indices
             const selectedColumns = csvColumns
               .map((col, index) => ({ name: col.name, index, selected: col.selected }))
               .filter(col => col.selected);
