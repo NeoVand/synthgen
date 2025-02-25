@@ -74,6 +74,7 @@ import OllamaSettings from './components/OllamaSettings'
 import FlashcardView from './components/FlashcardView'
 import OllamaConnectionModal from './components/OllamaConnectionModal'
 import PromptTemplates from './components/PromptTemplates'  // Add this import
+import { default as CustomAboutDialog } from './components/AboutDialog'  // Import with a different name
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -196,50 +197,17 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [showChunkingDialog, setShowChunkingDialog] = useState<boolean>(false);
   const [pendingChunks, setPendingChunks] = useState<string[]>([]);
+  const [, setModels] = useState<any[]>([]);
+  const [ollamaSettings, setOllamaSettings] = useState<OllamaSettingsType>({
+    model: '',
+    temperature: 0.7,
+    topP: 0.9,
+    useFixedSeed: false,
+    seed: 42,
+    numCtx: 4096
+  });
 
-  // Add About dialog component
-  const AboutDialog = () => {
-    return (
-      <Dialog 
-        open={showAboutDialog} 
-        onClose={() => setShowAboutDialog(false)}
-        PaperProps={{
-          sx: {
-            borderRadius: '12px',
-            maxWidth: '400px',
-            bgcolor: theme.palette.mode === 'dark' ? '#1D1F21' : '#FFFFFF',
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          pb: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-          color: theme.palette.primary.main
-        }}>
-          <ScienceIcon sx={{ fontSize: '1.75rem' }} />
-          <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
-            Q&A Generator
-          </Typography>
-        </DialogTitle>
-        <DialogContent sx={{ pt: '4px !important' }}>
-          <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-            A powerful tool for generating question-answer pairs from documents using local language models.
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Developed by{' '}
-            <Typography component="span" sx={{ 
-              color: theme.palette.primary.main,
-              fontWeight: 500
-            }}>
-              Neo Mohsenvand
-            </Typography>
-          </Typography>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  // Add About dialog component that uses our imported component
 
   // Add useEffect to check Ollama connection on mount
   useEffect(() => {
@@ -248,35 +216,41 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       setIsOllamaConnected(isConnected);
       if (!isConnected) {
         setOllamaError({
-          message: "Cannot connect to Ollama. Please make sure Ollama is running on your machine.",
+          message: "Unable to connect to Ollama. Please make sure it's running and accessible at " + OLLAMA_BASE_URL,
           isOllamaError: true
         });
         setShowConnectionModal(true);
       } else {
-        setOllamaError(null);
+        // If connected, get models
+        try {
+          const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
+          if (response.ok) {
+            const data = await response.json();
+            setModels(data.models);
+            
+            // If settings had a model that exists, keep it, otherwise use the first available model
+            if (ollamaSettings.model && data.models.some((m: any) => m.name === ollamaSettings.model)) {
+              // Keep current model
+            } else if (data.models.length > 0) {
+              setOllamaSettings(prev => ({
+                ...prev,
+                model: data.models[0].name
+              }));
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching models:', err);
+        }
       }
     };
     
     checkConnection();
-    const interval = setInterval(checkConnection, 5000); // Check every 5 seconds
-    
-    return () => clearInterval(interval);
   }, []);
 
   // Add handler for help button
   const handleConnectionHelp = () => {
     setShowConnectionModal(true);
   };
-
-  // 1. Model Settings
-  const [ollamaSettings, setOllamaSettings] = useState<OllamaSettingsType>({
-    model: '',
-    temperature: 0.7,
-    topP: 0.9,
-    useFixedSeed: false,
-    seed: 42,
-    numCtx: 2048,
-  })
 
   // Pagination state
   const [page, setPage] = useState<number>(0);
@@ -4239,7 +4213,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         isConnected={isOllamaConnected}
         error={ollamaError?.message}
       />
-      <AboutDialog />
+      <CustomAboutDialog 
+        open={showAboutDialog} 
+        onClose={() => setShowAboutDialog(false)} 
+      />
       <ImportConfirmationDialog />
       <ChunkingConfirmationDialog />
     </Box>
