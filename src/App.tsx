@@ -19,11 +19,6 @@ import {
   alpha,
   Tooltip,
   MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  DialogContentText,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
@@ -44,7 +39,6 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import ViewColumnIcon from '@mui/icons-material/ViewColumn'
 import StyleIcon from '@mui/icons-material/Style'
 import AddIcon from '@mui/icons-material/Add'
-import CloseIcon from '@mui/icons-material/Close'
 import { saveAs } from 'file-saver'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
@@ -74,7 +68,9 @@ import OllamaSettings from './components/OllamaSettings'
 import FlashcardView from './components/FlashcardView'
 import OllamaConnectionModal from './components/OllamaConnectionModal'
 import PromptTemplates from './components/PromptTemplates'  // Add this import
-import { default as CustomAboutDialog } from './components/AboutDialog'  // Import with a different name
+import { default as CustomAboutDialog } from './components/dialogs/AboutDialog'  // Updated import location
+import ImportConfirmationDialog from './components/dialogs/ImportConfirmationDialog'  // Import the ImportConfirmationDialog component
+import ChunkingConfirmationDialog from './components/dialogs/ChunkingConfirmationDialog'  // Import the ChunkingConfirmationDialog component
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -1398,7 +1394,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   //------------------------------------------------------------------------------------
   const handleImportCSV = async (
     fileOrEvent: File | React.ChangeEvent<HTMLInputElement>,
-    mode: 'replace' | 'append' = 'replace'
+    mode: 'replace' | 'append' = 'replace',
+    fromDialog: boolean = false // Add parameter to know if we're coming from dialog
   ) => {
     let file: File | null = null;
     
@@ -1409,10 +1406,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       fileOrEvent.target.value = ''; // Reset input
     }
 
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     // If there's existing data and we haven't specified a mode, show dialog
-    if (qaPairs.length > 0 && mode === 'replace') {
+    // Only show dialog if we're not already coming from the dialog
+    if (qaPairs.length > 0 && mode === 'replace' && !fromDialog) {
       setPendingImportFile(file);
       setShowImportDialog(true);
       return;
@@ -2175,266 +2175,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       }
     }
   };
-
-  // Add the ImportConfirmationDialog component definition
-  const ImportConfirmationDialog: React.FC = () => {
-    return (
-      <Dialog
-        open={showImportDialog}
-        onClose={() => {
-          setShowImportDialog(false);
-          setPendingImportFile(null);
-        }}
-        PaperProps={{
-          sx: {
-            borderRadius: '12px',
-            width: '600px', // Increased width to fit buttons
-            maxWidth: '90vw',
-            bgcolor: theme.palette.mode === 'dark' ? '#1D1F21' : '#FFFFFF',
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          pb: 1,
-          color: theme.palette.warning.main,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1
-        }}>
-          <WarningIcon />
-          Existing Data Found
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ color: 'text.secondary' }}>
-            You have existing Q&A pairs in the table. How would you like to proceed with the imported data?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ 
-          px: 3, 
-          pb: 2, 
-          pt: 1,
-          display: 'flex',
-          gap: 1,
-          '& > button': {
-            flex: '1 0 auto', // Make buttons take equal width
-            minWidth: '120px', // Ensure minimum width
-          }
-        }}>
-          <Button
-            onClick={() => {
-              setShowImportDialog(false);
-              setPendingImportFile(null);
-            }}
-            startIcon={<CloseIcon />}
-            sx={{ 
-              color: theme.palette.text.secondary,
-              borderColor: theme.palette.text.secondary,
-              border: '1px solid',
-              '&:hover': {
-                bgcolor: theme.palette.mode === 'dark' 
-                  ? 'rgba(255, 255, 255, 0.05)'
-                  : 'rgba(0, 0, 0, 0.05)',
-                borderColor: theme.palette.text.primary,
-              }
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              handleExportCSV();
-              // Keep dialog open to let user decide next action
-            }}
-            startIcon={<SaveAltIcon />}
-            sx={{
-              color: theme.palette.warning.main,
-              borderColor: theme.palette.warning.main,
-              border: '1px solid',
-              '&:hover': {
-                bgcolor: alpha(theme.palette.warning.main, 0.08),
-                borderColor: theme.palette.warning.dark,
-              }
-            }}
-          >
-            Export First
-          </Button>
-          <Button
-            onClick={() => {
-              setShowImportDialog(false);
-              if (pendingImportFile) {
-                handleImportCSV(pendingImportFile, 'replace');
-              }
-              setPendingImportFile(null);
-            }}
-            startIcon={<DeleteIcon />}
-            sx={{
-              color: theme.palette.error.main,
-              borderColor: theme.palette.error.main,
-              '&:hover': {
-                bgcolor: alpha(theme.palette.error.main, 0.08),
-                borderColor: theme.palette.error.main,
-              }
-            }}
-            variant="outlined"
-          >
-            Replace All
-          </Button>
-          <Button
-            onClick={() => {
-              setShowImportDialog(false);
-              if (pendingImportFile) {
-                handleImportCSV(pendingImportFile, 'append');
-              }
-              setPendingImportFile(null);
-            }}
-            startIcon={<AddIcon />}
-            variant="contained"
-            sx={{
-              bgcolor: theme.palette.primary.main,
-              color: '#fff',
-              '&:hover': {
-                bgcolor: theme.palette.primary.dark,
-              }
-            }}
-          >
-            Append
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
-
-  // Add the ChunkingConfirmationDialog component definition
-  const ChunkingConfirmationDialog: React.FC = () => {
-    return (
-      <Dialog
-        open={showChunkingDialog}
-        onClose={() => {
-          setShowChunkingDialog(false);
-          setPendingChunks([]);
-        }}
-        PaperProps={{
-          sx: {
-            borderRadius: '12px',
-            width: '600px', // Increased width to fit buttons
-            maxWidth: '90vw',
-            bgcolor: theme.palette.mode === 'dark' ? '#1D1F21' : '#FFFFFF',
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          pb: 1,
-          color: theme.palette.warning.main,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1
-        }}>
-          <WarningIcon />
-          Existing Data Found
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ color: 'text.secondary' }}>
-            You have existing Q&A pairs in the table. How would you like to proceed with the new chunks?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ 
-          px: 3, 
-          pb: 2, 
-          pt: 1,
-          display: 'flex',
-          gap: 1,
-          '& > button': {
-            flex: '1 0 auto', // Make buttons take equal width
-            minWidth: '120px', // Ensure minimum width
-          }
-        }}>
-          <Button
-            onClick={() => {
-              setShowChunkingDialog(false);
-              setPendingChunks([]);
-            }}
-            startIcon={<CloseIcon />}
-            sx={{ 
-              color: theme.palette.text.secondary,
-              borderColor: theme.palette.text.secondary,
-              border: '1px solid',
-              '&:hover': {
-                bgcolor: theme.palette.mode === 'dark' 
-                  ? 'rgba(255, 255, 255, 0.05)'
-                  : 'rgba(0, 0, 0, 0.05)',
-                borderColor: theme.palette.text.primary,
-              }
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              // Replace existing chunks with new ones
-              const newPairs = pendingChunks.map((chunk, idx) => ({
-                id: idx + 1,
-                context: chunk,
-                question: '',
-                answer: '',
-                selected: false,
-                generating: {
-                  question: false,
-                  answer: false
-                }
-              }));
-              setQaPairs(newPairs);
-              setShowChunkingDialog(false);
-              setPendingChunks([]);
-            }}
-            startIcon={<DeleteIcon />}
-            sx={{
-              color: theme.palette.error.main,
-              borderColor: theme.palette.error.main,
-              border: '1px solid',
-              '&:hover': {
-                bgcolor: alpha(theme.palette.error.main, 0.08),
-                borderColor: theme.palette.error.main,
-              }
-            }}
-          >
-            Replace All
-          </Button>
-          <Button
-            onClick={() => {
-              // Append new chunks to existing ones
-              const lastId = Math.max(...qaPairs.map(qa => qa.id));
-              const newPairs = pendingChunks.map((chunk, idx) => ({
-                id: lastId + idx + 1,
-                context: chunk,
-                question: '',
-                answer: '',
-                selected: false,
-                generating: {
-                  question: false,
-                  answer: false
-                }
-              }));
-              setQaPairs(prev => [...prev, ...newPairs]);
-              setShowChunkingDialog(false);
-              setPendingChunks([]);
-            }}
-            startIcon={<AddIcon />}
-            variant="contained"
-            sx={{
-              bgcolor: theme.palette.primary.main,
-              color: '#fff',
-              '&:hover': {
-                bgcolor: theme.palette.primary.dark,
-              }
-            }}
-          >
-            Append
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
-
   //------------------------------------------------------------------------------------
   //  Render UI
   //------------------------------------------------------------------------------------
@@ -4217,8 +3957,82 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         open={showAboutDialog} 
         onClose={() => setShowAboutDialog(false)} 
       />
-      <ImportConfirmationDialog />
-      <ChunkingConfirmationDialog />
+      <ImportConfirmationDialog 
+        open={showImportDialog}
+        onClose={() => {
+          setShowImportDialog(false);
+          setPendingImportFile(null);
+        }}
+        onExport={handleExportCSV}
+        onReplace={(file: File | null) => {
+          // First process the file, then close dialog
+          if (file) {
+            // Use a copy to ensure we don't lose the file reference
+            const fileCopy = file;
+            // Pass true for fromDialog parameter to prevent showing dialog again
+            handleImportCSV(fileCopy, 'replace', true);
+          }
+          // Close dialog after processing
+          setShowImportDialog(false);
+          setPendingImportFile(null);
+        }}
+        onAppend={(file: File | null) => {
+          // First process the file, then close dialog
+          if (file) {
+            // Use a copy to ensure we don't lose the file reference
+            const fileCopy = file;
+            // Pass true for fromDialog parameter to prevent showing dialog again
+            handleImportCSV(fileCopy, 'append', true);
+          }
+          // Close dialog after processing
+          setShowImportDialog(false);
+          setPendingImportFile(null);
+        }}
+        pendingImportFile={pendingImportFile}
+      />
+      <ChunkingConfirmationDialog 
+        open={showChunkingDialog}
+        onClose={() => {
+          setShowChunkingDialog(false);
+          setPendingChunks([]);
+        }}
+        onReplace={(chunks: string[]) => {
+          // Replace existing chunks with new ones
+          const newPairs = chunks.map((chunk, idx) => ({
+            id: idx + 1,
+            context: chunk,
+            question: '',
+            answer: '',
+            selected: false,
+            generating: {
+              question: false,
+              answer: false
+            }
+          }));
+          setQaPairs(newPairs);
+          setShowChunkingDialog(false);
+          setPendingChunks([]);
+        }}
+        onAppend={(chunks: string[]) => {
+          // Append new chunks to existing ones
+          const lastId = Math.max(...qaPairs.map(qa => qa.id));
+          const newPairs = chunks.map((chunk, idx) => ({
+            id: lastId + idx + 1,
+            context: chunk,
+            question: '',
+            answer: '',
+            selected: false,
+            generating: {
+              question: false,
+              answer: false
+            }
+          }));
+          setQaPairs(prev => [...prev, ...newPairs]);
+          setShowChunkingDialog(false);
+          setPendingChunks([]);
+        }}
+        pendingChunks={pendingChunks}
+      />
     </Box>
   );
 };
