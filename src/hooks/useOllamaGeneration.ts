@@ -148,9 +148,15 @@ export const useOllamaGeneration = () => {
       if (row.generating?.question) return '';
       
       // Update the row to indicate generation is in progress
-      const updatedQA = qaPairs.map(qa => 
+      const updatedQA: QAPair[] = qaPairs.map(qa => 
         qa.id === row.id 
-          ? { ...qa, generating: { ...qa.generating, question: true } } 
+          ? { 
+              ...qa, 
+              generating: { 
+                question: true, 
+                answer: qa.generating?.answer || false 
+              } 
+            } 
           : qa
       );
       setQaPairs(updatedQA);
@@ -170,12 +176,15 @@ export const useOllamaGeneration = () => {
         },
         onComplete: (fullText) => {
           // Update the QA pair with the generated question
-          const finalUpdatedQA = qaPairs.map(qa => 
+          const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
             qa.id === row.id 
               ? { 
                   ...qa, 
                   question: fullText, 
-                  generating: { ...qa.generating, question: false } 
+                  generating: { 
+                    question: false, 
+                    answer: qa.generating?.answer || false 
+                  } 
                 } 
               : qa
           );
@@ -188,9 +197,15 @@ export const useOllamaGeneration = () => {
       console.error('Error generating question:', err);
       
       // Update the QA pair to indicate generation has stopped
-      const finalUpdatedQA = qaPairs.map(qa => 
+      const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
         qa.id === row.id 
-          ? { ...qa, generating: { ...qa.generating, question: false } } 
+          ? { 
+              ...qa, 
+              generating: { 
+                question: false, 
+                answer: qa.generating?.answer || false 
+              } 
+            } 
           : qa
       );
       setQaPairs(finalUpdatedQA);
@@ -206,9 +221,15 @@ export const useOllamaGeneration = () => {
       if (row.generating?.answer || !row.question) return '';
       
       // Update the row to indicate generation is in progress
-      const updatedQA = qaPairs.map(qa => 
+      const updatedQA: QAPair[] = qaPairs.map(qa => 
         qa.id === row.id 
-          ? { ...qa, generating: { ...qa.generating, answer: true } } 
+          ? { 
+              ...qa, 
+              generating: { 
+                answer: true, 
+                question: qa.generating?.question || false 
+              } 
+            } 
           : qa
       );
       setQaPairs(updatedQA);
@@ -228,12 +249,15 @@ export const useOllamaGeneration = () => {
         },
         onComplete: (fullText) => {
           // Update the QA pair with the generated answer
-          const finalUpdatedQA = qaPairs.map(qa => 
+          const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
             qa.id === row.id 
               ? { 
                   ...qa, 
                   answer: fullText, 
-                  generating: { ...qa.generating, answer: false } 
+                  generating: { 
+                    answer: false, 
+                    question: qa.generating?.question || false 
+                  } 
                 } 
               : qa
           );
@@ -246,9 +270,15 @@ export const useOllamaGeneration = () => {
       console.error('Error generating answer:', err);
       
       // Update the QA pair to indicate generation has stopped
-      const finalUpdatedQA = qaPairs.map(qa => 
+      const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
         qa.id === row.id 
-          ? { ...qa, generating: { ...qa.generating, answer: false } } 
+          ? { 
+              ...qa, 
+              generating: { 
+                answer: false, 
+                question: qa.generating?.question || false 
+              } 
+            } 
           : qa
       );
       setQaPairs(finalUpdatedQA);
