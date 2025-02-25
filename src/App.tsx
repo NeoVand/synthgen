@@ -197,7 +197,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [showChunkingDialog, setShowChunkingDialog] = useState<boolean>(false);
   const [pendingChunks, setPendingChunks] = useState<string[]>([]);
-  const [models, setModels] = useState<any[]>([]);
+  const [, setModels] = useState<any[]>([]);
   const [ollamaSettings, setOllamaSettings] = useState<OllamaSettingsType>({
     model: '',
     temperature: 0.7,
@@ -208,15 +208,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   });
 
   // Add About dialog component that uses our imported component
-  const AboutDialog = () => {
-    // Use the imported AboutDialog component
-    return (
-      <CustomAboutDialog
-        open={showAboutDialog}
-        onClose={() => setShowAboutDialog(false)}
-      />
-    );
-  };
 
   // Add useEffect to check Ollama connection on mount
   useEffect(() => {
