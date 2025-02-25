@@ -69,13 +69,13 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
       setAvailableModels(models);
       setError(null);
       
-      if (models.length > 0 && !settings.model) {
-        const newSettings = { ...settings, model: models[0] };
-        setSettings(newSettings);
-        if (autoApply) {
-          onSettingsSave(newSettings);
+      // Just update the settings state without calling onSettingsSave directly
+      setSettings(currentSettings => {
+        if (models.length > 0 && !currentSettings.model) {
+          return { ...currentSettings, model: models[0] };
         }
-      }
+        return currentSettings;
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error('Error fetching models:', errorMessage);
@@ -83,12 +83,20 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
     } finally {
       setLoading(false);
     }
-  }, [settings, autoApply, onSettingsSave]);
+  }, []); // No dependencies to avoid render loops
 
   // Fetch models on mount only
   useEffect(() => {
     fetchModels();
   }, [fetchModels]);
+
+  // Effect to handle the case when we need to update model after fetching
+  useEffect(() => {
+    // Only apply the setting when autoApply is true and settings has a model
+    if (autoApply && settings.model && !initialSettings?.model) {
+      onSettingsSave(settings);
+    }
+  }, [autoApply, settings.model, onSettingsSave, initialSettings?.model]);
 
   // Add effect to update settings when initialSettings changes
   useEffect(() => {
@@ -97,19 +105,19 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({ onSettingsSave, autoApp
     }
   }, [initialSettings]);
 
-  // Auto-apply changes when settings change if autoApply is true
-  useEffect(() => {
-    if (autoApply && initialSettings && settings !== initialSettings) {
-      onSettingsSave(settings);
-    }
-  }, [settings, autoApply, onSettingsSave, initialSettings]);
-
-
   const handleSettingChange = (field: keyof OllamaSettings, value: any) => {
+    // First update the local state
     const newSettings = { ...settings, [field]: value };
     setSettings(newSettings);
+    
+    // Then, if autoApply is enabled, use a requestAnimationFrame to ensure
+    // the state update happens after rendering is complete
     if (autoApply) {
-      onSettingsSave(newSettings);
+      // Use requestAnimationFrame to defer the state update to parent
+      // This prevents the "Cannot update a component while rendering a different component" error
+      requestAnimationFrame(() => {
+        onSettingsSave(newSettings);
+      });
     }
   };
 
