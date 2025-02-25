@@ -48,8 +48,6 @@ const TableView: React.FC<TableViewProps> = ({
   availableRowsPerPage,
   expandedCells,
   isGenerating,
-  generationType,
-  generationProgress,
   onPageChange,
   onRowsPerPageChange,
   onToggleCellExpansion,
