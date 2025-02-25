@@ -27,7 +27,7 @@ interface FlashcardViewProps {
   qaPairs: QAPair[];
   onUpdateQA: (updatedQA: QAPair) => void;
   currentIndex: number;
-  chunkingAlgorithm: 'recursive' | 'line' | 'csv-tsv' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
+  chunkingAlgorithm: 'recursive' | 'line' | 'csv-tsv' | 'jsonl' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({
@@ -204,7 +204,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               Context
             </Typography>
           </Box>
-          {chunkingAlgorithm === 'csv-tsv' ? (
+          {(chunkingAlgorithm === 'csv-tsv' || chunkingAlgorithm === 'jsonl') ? (
             <Box sx={{
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
               fontSize: '0.9rem',
@@ -223,72 +223,196 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                   };
                 }).filter(Boolean) as { key: string; value: string }[];
 
-                return pairs.map(({ key, value }, index) => (
-                  <Box 
-                    key={index}
-                    sx={{
-                      display: 'flex',
-                      gap: 2,
-                      p: 1,
-                      borderBottom: `1px solid ${theme.palette.divider}`,
-                      '&:hover': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.04)
-                      },
-                    }}
-                  >
-                    <Box sx={{
-                      minWidth: '150px',
-                      maxWidth: '200px',
-                      fontWeight: 600,
-                      color: theme.palette.primary.main,
-                      opacity: 0.8,
-                      flexShrink: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {key}
-                    </Box>
-                    <TextField
-                      value={value}
-                      onChange={(e) => {
-                        const newPairs = [...pairs];
-                        newPairs[index] = { key, value: e.target.value };
-                        const newContext = newPairs
-                          .map(p => `${p.key}: ${p.value}`)
-                          .join('\n');
-                        onUpdateQA({
-                          ...currentQA,
-                          context: newContext
-                        });
-                      }}
-                      variant="standard"
-                      multiline
-                      fullWidth
-                      InputProps={{
-                        disableUnderline: true,
-                        sx: {
-                          fontSize: '0.9rem',
-                          fontFamily: 'inherit',
-                          backgroundColor: 'transparent',
-                          transition: 'background-color 0.2s ease',
-                          borderRadius: 1,
-                          '&:focus-within': {
-                            backgroundColor: theme.palette.mode === 'dark' 
-                              ? 'rgba(0, 0, 0, 0.3)'
-                              : 'rgba(255, 255, 255, 0.6)',
-                          },
-                          '& textarea': {
-                            padding: '4px 8px',
-                            overflow: 'auto',
-                            whiteSpace: 'pre-wrap',
-                            wordWrap: 'break-word'
-                          }
+                // Group consecutive lines with the same key (for handling multi-line lists)
+                const groupedPairs: { key: string; values: string[]; isArray: boolean }[] = [];
+                
+                // First pass: identify all unique keys
+                const uniqueKeys = new Set<string>();
+                pairs.forEach(pair => uniqueKeys.add(pair.key));
+                
+                // Second pass: group values by key
+                uniqueKeys.forEach(key => {
+                  const keyValues = pairs
+                    .filter(pair => pair.key === key)
+                    .map(pair => pair.value);
+                  
+                  // Check if this is an array (multiple values with same key or numbered list format)
+                  const isArray = keyValues.length > 1 || 
+                                 (keyValues.length === 1 && /^\s*\d+\.\s/.test(keyValues[0]));
+                  
+                  // For arrays with a single value that contains multiple lines with numbers
+                  let processedValues = keyValues;
+                  if (keyValues.length === 1 && keyValues[0].includes('\n')) {
+                    // Split the multi-line value into separate lines
+                    processedValues = keyValues[0].split('\n').filter(line => line.trim() !== '');
+                  }
+                  
+                  groupedPairs.push({
+                    key,
+                    values: processedValues,
+                    isArray
+                  });
+                });
+
+                return groupedPairs.map(({ key, values, isArray }, index) => {
+                  // For arrays, join all values with newlines
+                  const value = values.join('\n');
+                  
+                  // Check if the value is a JSON object or array
+                  const isJsonObject = value.trim().startsWith('{') && value.trim().endsWith('}');
+                  const isJsonArray = value.trim().startsWith('[') && value.trim().endsWith(']');
+                  const isNumberedList = isArray || /^\s*\d+\.\s/.test(value);
+                  
+                  // For JSONL data, try to format complex values nicely
+                  let formattedValue = value;
+                  let isComplex = false;
+                  
+                  if (chunkingAlgorithm === 'jsonl' || chunkingAlgorithm === 'csv-tsv') {
+                    if (isJsonObject || isJsonArray) {
+                      try {
+                        // Try to parse and pretty-print JSON
+                        const parsedValue = JSON.parse(value);
+                        formattedValue = JSON.stringify(parsedValue, null, 2);
+                        isComplex = true;
+                      } catch (e) {
+                        // If parsing fails, use the original value
+                        console.log('Failed to parse JSON value:', e);
+                      }
+                    } else if (isNumberedList) {
+                      // Already formatted as a numbered list, keep as is
+                      isComplex = true;
+                      
+                      // Make sure each line starts with a number if this is an array
+                      if (isArray && values.length > 1) {
+                        // Check if the values already have numbers
+                        const allHaveNumbers = values.every(v => /^\s*\d+\.\s/.test(v));
+                        
+                        if (!allHaveNumbers) {
+                          // Add numbers to the values
+                          formattedValue = values.map((v, i) => `${i + 1}. ${v}`).join('\n');
                         }
+                      }
+                    }
+                  }
+                  
+                  return (
+                    <Box 
+                      key={index}
+                      sx={{
+                        display: 'flex',
+                        gap: 2,
+                        p: 1,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.primary.main, 0.04)
+                        },
                       }}
-                    />
-                  </Box>
-                ));
+                    >
+                      <Box sx={{
+                        minWidth: '150px',
+                        maxWidth: '200px',
+                        fontWeight: 600,
+                        color: theme.palette.primary.main,
+                        opacity: 0.8,
+                        flexShrink: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        {key}
+                        {isNumberedList && (
+                          <Box 
+                            component="span" 
+                            sx={{ 
+                              ml: 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.7rem',
+                              color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+                              border: '1px solid',
+                              borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
+                              borderRadius: '4px',
+                              padding: '0px 4px',
+                              height: '16px'
+                            }}
+                          >
+                            [ ]
+                          </Box>
+                        )}
+                      </Box>
+                      <TextField
+                        value={formattedValue}
+                        onChange={(e) => {
+                          // For arrays, we need to handle each item separately
+                          if (isArray) {
+                            const newLines = e.target.value.split('\n');
+                            
+                            // Create new pairs array with updated values
+                            const newPairs = [...pairs];
+                            
+                            // Remove all existing pairs with this key
+                            const filteredPairs = newPairs.filter(p => p.key !== key);
+                            
+                            // Add new pairs for each line
+                            const newPairsForKey = newLines.map(line => ({
+                              key,
+                              value: line.trim()
+                            })).filter(p => p.value !== ''); // Filter out empty lines
+                            
+                            // Combine filtered pairs with new pairs
+                            const combinedPairs = [...filteredPairs, ...newPairsForKey];
+                            
+                            // Update the context
+                            const newContext = combinedPairs
+                              .map(p => `${p.key}: ${p.value}`)
+                              .join('\n');
+                            
+                            onUpdateQA({
+                              ...currentQA,
+                              context: newContext
+                            });
+                          } else {
+                            // Simple case - just update this pair
+                            const newPairs = [...pairs];
+                            const pairIndex = newPairs.findIndex(p => 
+                              p.key === key && p.value === values[0]
+                            );
+                            
+                            if (pairIndex !== -1) {
+                              newPairs[pairIndex] = { key, value: e.target.value };
+                              const newContext = newPairs
+                                .map(p => `${p.key}: ${p.value}`)
+                                .join('\n');
+                              
+                              onUpdateQA({
+                                ...currentQA,
+                                context: newContext
+                              });
+                            }
+                          }
+                        }}
+                        fullWidth
+                        variant="standard"
+                        multiline={isComplex || isArray}
+                        minRows={isComplex || isArray ? 3 : 1}
+                        maxRows={isComplex || isArray ? 15 : 1}
+                        InputProps={{
+                          disableUnderline: true,
+                          sx: {
+                            fontSize: '0.9rem',
+                            fontFamily: isComplex || isArray ? 
+                              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' : 
+                              'inherit',
+                            whiteSpace: isComplex || isArray ? 'pre-wrap' : 'normal',
+                          }
+                        }}
+                      />
+                    </Box>
+                  );
+                });
               })()}
             </Box>
           ) : (

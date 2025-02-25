@@ -154,7 +154,7 @@ function getSectionRegistry() {
 
 
 // Add type for chunking algorithms
-type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
+type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv' | 'jsonl' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 
 // Add these new types and constants
 interface OllamaError {
@@ -314,6 +314,18 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [csvColumns, setCsvColumns] = useState<{name: string; selected: boolean}[]>([])
   const [csvData, setCsvData] = useState<string[][]>([])
 
+  // Add state for JSONL keys
+  const [jsonlKeys, setJsonlKeys] = useState<{
+    name: string; 
+    path: string; 
+    selected: boolean;
+    isLeaf: boolean;
+    level: number;
+    hasChildren: boolean;
+    isArray?: boolean;
+  }[]>([])
+  const [jsonlData, setJsonlData] = useState<Record<string, any>[]>([])
+
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
 
   // Add state for expanded cells and sections
@@ -465,6 +477,165 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         
         // Set chunking algorithm to CSV/TSV
         setChunkingAlgorithm('csv-tsv')
+      } else if (ext === 'jsonl' || ext === 'json') {
+        // For JSONL/JSON files, we'll store the raw content and parse keys
+        textContent = await file.text()
+        
+        // Parse the content based on file type
+        const jsonObjects: Record<string, any>[] = []
+        
+        try {
+          if (ext === 'jsonl') {
+            // For JSONL, parse each line as a separate JSON object
+            const lines = textContent.split('\n').filter(line => line.trim())
+            
+            for (const line of lines) {
+              try {
+                const jsonObj = JSON.parse(line)
+                jsonObjects.push(jsonObj)
+              } catch (err) {
+                console.error('Error parsing JSONL line:', err)
+                // Skip invalid lines
+              }
+            }
+          } else {
+            // For JSON, parse the entire file as a single JSON object or array
+            try {
+              const parsed = JSON.parse(textContent)
+              
+              if (Array.isArray(parsed)) {
+                // If it's an array, add each item as a separate object
+                jsonObjects.push(...parsed)
+              } else {
+                // If it's a single object, add it
+                jsonObjects.push(parsed)
+              }
+            } catch (err) {
+              console.error('Error parsing JSON:', err)
+              throw new Error('Invalid JSON format')
+            }
+          }
+          
+          if (jsonObjects.length === 0) {
+            throw new Error('No valid JSON objects found in the file')
+          }
+          
+          // Create a hierarchical structure of keys
+          interface KeyNode {
+            name: string;
+            path: string;
+            selected: boolean;
+            children: KeyNode[];
+            isLeaf: boolean;
+            parent?: string;
+            level: number;
+            isArray?: boolean;
+          }
+          
+          // First, collect all unique paths
+          const allPaths = new Set<string>();
+          const arrayPaths = new Set<string>();
+          
+          const collectPaths = (obj: any, prefix = '') => {
+            if (typeof obj !== 'object' || obj === null) return;
+            
+            if (Array.isArray(obj)) {
+              // Mark this path as an array
+              if (prefix) {
+                arrayPaths.add(prefix);
+              }
+              
+              // For arrays, we don't add indices as separate paths
+              // Instead, we just process the first item to get the structure
+              if (obj.length > 0) {
+                if (typeof obj[0] === 'object' && obj[0] !== null) {
+                  // For arrays of objects, process the first item to get structure
+                  collectPaths(obj[0], prefix);
+                } else {
+                  // For arrays of primitives, just mark the path
+                  allPaths.add(prefix);
+                }
+              } else {
+                // Empty array, just add the path
+                allPaths.add(prefix);
+              }
+            } else {
+              // For objects, process each key
+              Object.keys(obj).forEach(key => {
+                const path = prefix ? `${prefix}.${key}` : key;
+                allPaths.add(path);
+                
+                // Recursively collect nested paths
+                if (typeof obj[key] === 'object' && obj[key] !== null) {
+                  collectPaths(obj[key], path);
+                }
+              });
+            }
+          };
+          
+          // Collect paths from all objects
+          jsonObjects.forEach(obj => collectPaths(obj));
+          
+          // Convert paths to a flat array of key nodes with parent-child relationships
+          const keyNodes: KeyNode[] = Array.from(allPaths).map(path => {
+            const parts = path.split('.');
+            const name = parts[parts.length - 1];
+            const parent = parts.length > 1 ? parts.slice(0, -1).join('.') : undefined;
+            const level = parts.length - 1;
+            
+            // Check if this is an array or has an array parent
+            const isArray = arrayPaths.has(path);
+            
+            return {
+              name,
+              path,
+              selected: true,
+              children: [],
+              isLeaf: true, // Will be updated later
+              parent,
+              level,
+              isArray
+            };
+          });
+          
+          // Sort by path to ensure parents come before children
+          keyNodes.sort((a, b) => a.path.localeCompare(b.path));
+          
+          // Build parent-child relationships
+          keyNodes.forEach(node => {
+            if (node.parent) {
+              const parentNode = keyNodes.find(n => n.path === node.parent);
+              if (parentNode) {
+                parentNode.isLeaf = false;
+                parentNode.children.push(node);
+              }
+            }
+          });
+          
+          // Flatten the hierarchy for the UI, but keep the level information
+          const flattenedKeys = keyNodes.map(node => ({
+            name: node.name,
+            path: node.path,
+            selected: true,
+            isLeaf: node.isLeaf,
+            level: node.level,
+            hasChildren: !node.isLeaf,
+            isArray: node.isArray
+          }));
+          
+          // Set the keys in state
+          setJsonlKeys(flattenedKeys);
+          
+          // Store the parsed data for later processing
+          setJsonlData(jsonObjects);
+          
+          // Set chunking algorithm to JSONL
+          setChunkingAlgorithm('jsonl');
+        } catch (err) {
+          console.error('Error parsing JSONL:', err);
+          alert('Failed to parse JSONL. Please check the file format.');
+          return;
+        }
       } else {
         // CSV, TXT or other text files
         textContent = await file.text()
@@ -674,6 +845,108 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           } catch (err) {
             console.error('Error parsing CSV/TSV:', err);
             alert('Failed to parse CSV/TSV. Please check the file format.');
+            return;
+          }
+          break;
+          
+        case 'jsonl':
+          try {
+            if (jsonlData.length === 0) {
+              throw new Error('No valid JSON objects found in the file');
+            }
+
+            // Get selected keys
+            const selectedKeys = jsonlKeys
+              .filter(key => key.selected)
+              .map(key => key.path);
+
+            if (selectedKeys.length === 0) {
+              throw new Error('Please select at least one key to include');
+            }
+
+            // Helper function to get nested value from an object using a path
+            const getNestedValue = (obj: any, path: string): any => {
+              const parts = path.split('.');
+              let current = obj;
+              
+              for (const part of parts) {
+                if (current === null || current === undefined || typeof current !== 'object') {
+                  return undefined;
+                }
+                current = current[part];
+              }
+              
+              return current;
+            };
+
+            // Helper function to format values based on their type
+            const formatValue = (value: any): string => {
+              if (value === undefined || value === null) {
+                return '';
+              } else if (Array.isArray(value)) {
+                // For arrays, format each item with 1-based indices
+                if (value.length === 0) return '[]';
+                
+                // If array contains objects, format them nicely
+                if (typeof value[0] === 'object' && value[0] !== null) {
+                  return value.map((item, index) => {
+                    if (typeof item === 'object' && item !== null) {
+                      return `${index + 1}. ${JSON.stringify(item, null, 2).replace(/\n/g, '\n   ')}`;
+                    }
+                    return `${index + 1}. ${String(item)}`;
+                  }).join('\n');
+                }
+                
+                // For simple arrays, join with newlines and 1-based indices
+                return value.map((item, index) => `${index + 1}. ${String(item)}`).join('\n');
+              } else if (typeof value === 'object') {
+                // For objects, pretty print with indentation
+                return `\n${JSON.stringify(value, null, 2)}`;
+              } else {
+                // For primitive values, convert to string
+                return String(value);
+              }
+            };
+
+            // Process each JSON object into a formatted string
+            chunks = jsonlData.map(obj => {
+              const formattedChunks: string[] = [];
+              
+              // Process each selected key
+              selectedKeys.forEach(path => {
+                const value = getNestedValue(obj, path);
+                const parts = path.split('.');
+                const name = parts[parts.length - 1];
+                
+                // Skip undefined or null values
+                if (value === undefined || value === null) {
+                  return;
+                }
+                
+                // For arrays, create a separate entry for each item
+                if (Array.isArray(value)) {
+                  // Format each array item with 1-based indices
+                  const formattedItems = value.map((item, index) => {
+                    if (typeof item === 'object' && item !== null) {
+                      return `${name}: ${index + 1}. ${JSON.stringify(item, null, 2).replace(/\n/g, '\n   ')}`;
+                    }
+                    return `${name}: ${index + 1}. ${String(item)}`;
+                  });
+                  
+                  // Add all formatted items to the chunks
+                  formattedChunks.push(...formattedItems);
+                } else {
+                  // For non-arrays, add a single entry
+                  formattedChunks.push(`${name}: ${formatValue(value)}`);
+                }
+              });
+              
+              return formattedChunks.join('\n');
+            })
+            .filter(chunk => chunk.trim().length > 0); // Remove empty chunks
+          } catch (err) {
+            console.error('Error processing JSONL:', err);
+            alert('Failed to process JSONL. Please check the file format.');
             return;
           }
           break;
@@ -2424,7 +2697,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         {section.id === 'section-upload' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
                             <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-                              Accepts .txt, .csv, .pdf, .docx, .md
+                              Accepts .txt, .csv, .pdf, .docx, .md, .jsonl, .json
                             </Typography>
                             <Button 
                               variant="contained" 
@@ -2436,7 +2709,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                               Choose File
                               <input
                                 type="file"
-                                accept=".pdf,.docx,.csv,.txt,.md"
+                                accept=".pdf,.docx,.csv,.txt,.md,.jsonl,.json"
                                 hidden
                                 onChange={handleFileUpload}
                               />
@@ -2667,6 +2940,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                                 <MenuItem value="recursive">Recursive Character Splitter</MenuItem>
                                 <MenuItem value="line">Line by Line</MenuItem>
                                 <MenuItem value="csv-tsv">CSV/TSV Parser</MenuItem>
+                                <MenuItem value="jsonl">JSONL Parser</MenuItem>
                                 <MenuItem value="sentence-chunks">Sentence Chunks</MenuItem>
                                 <MenuItem value="markdown-chunks">Markdown Chunks</MenuItem>
                                 <MenuItem value="rolling-sentence-chunks">Rolling Sentence Chunks</MenuItem>
@@ -2882,6 +3156,181 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                                   ) : (
                                     <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                                       Upload a CSV/TSV file to see columns
+                                    </Typography>
+                                  )}
+                                </Paper>
+                              </Box>
+                            )}
+                            
+                            {chunkingAlgorithm === 'jsonl' && (
+                              <Box sx={{ mb: 2 }}>
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  mb: 1 
+                                }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                      JSONL Keys
+                                    </Typography>
+                                    <Tooltip title="Select which keys to include in the chunks. Each chunk will contain the selected keys from one JSON object. Nested keys are shown in a tree structure." placement="right">
+                                      <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                        <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Box>
+                                </Box>
+                                <Paper variant="outlined" sx={{ 
+                                  p: 1.5,
+                                  borderRadius: '8px',
+                                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                                  border: '1px solid',
+                                  borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                                }}>
+                                  {jsonlKeys.length > 0 ? (
+                                    <Box sx={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: 0.5,
+                                      maxHeight: '200px',
+                                      overflowY: 'auto',
+                                      '&::-webkit-scrollbar': {
+                                        width: '8px',
+                                      },
+                                      '&::-webkit-scrollbar-track': {
+                                        background: 'transparent',
+                                      },
+                                      '&::-webkit-scrollbar-thumb': {
+                                        background: theme.palette.mode === 'dark' 
+                                          ? 'rgba(255, 255, 255, 0.1)' 
+                                          : 'rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '4px',
+                                      },
+                                    }}>
+                                      {jsonlKeys.map((key) => (
+                                        <Box 
+                                          key={key.path} 
+                                          sx={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center',
+                                            p: 0.5,
+                                            pl: key.level * 1.5 + 0.5, // Indent based on level
+                                            borderRadius: '4px',
+                                            '&:hover': {
+                                              bgcolor: theme.palette.mode === 'dark' 
+                                                ? 'rgba(255, 255, 255, 0.05)' 
+                                                : 'rgba(0, 0, 0, 0.05)',
+                                            }
+                                          }}
+                                        >
+                                          <Checkbox
+                                            size="small"
+                                            checked={key.selected}
+                                            onChange={(e) => {
+                                              const isSelected = e.target.checked;
+                                              
+                                              // Create a new array with the updated selection
+                                              const updatedKeys = jsonlKeys.map(k => {
+                                                // If this is the key being changed, update its selection
+                                                if (k.path === key.path) {
+                                                  return { ...k, selected: isSelected };
+                                                }
+                                                
+                                                // For parent keys, if we're selecting a child, make sure the parent is selected
+                                                if (key.path.startsWith(k.path + '.') && isSelected && k.path !== key.path) {
+                                                  return { ...k, selected: true };
+                                                }
+                                                
+                                                // For child keys, if we're deselecting a parent, deselect all children
+                                                if (k.path.startsWith(key.path + '.') && !isSelected) {
+                                                  return { ...k, selected: false };
+                                                }
+                                                
+                                                // Otherwise, keep the key as is
+                                                return k;
+                                              });
+                                              
+                                              setJsonlKeys(updatedKeys);
+                                            }}
+                                            sx={{
+                                              color: theme.palette.mode === 'dark' 
+                                                ? 'rgba(255, 255, 255, 0.7)' 
+                                                : 'rgba(0, 0, 0, 0.6)',
+                                              '&.Mui-checked': {
+                                                color: theme.palette.primary.main,
+                                              },
+                                            }}
+                                          />
+                                          {key.hasChildren && (
+                                            <Box 
+                                              component="span" 
+                                              sx={{ 
+                                                mr: 0.5, 
+                                                color: theme.palette.text.secondary,
+                                                fontSize: '0.75rem',
+                                                width: '16px',
+                                                display: 'inline-flex',
+                                                justifyContent: 'center'
+                                              }}
+                                            >
+                                              {key.selected ? '▼' : '▶'}
+                                            </Box>
+                                          )}
+                                          {!key.hasChildren && (
+                                            <Box 
+                                              component="span" 
+                                              sx={{ 
+                                                mr: 0.5, 
+                                                width: '16px' 
+                                              }}
+                                            />
+                                          )}
+                                          <Typography 
+                                            variant="body2" 
+                                            sx={{ 
+                                              ml: 0.5,
+                                              fontSize: '0.875rem',
+                                              color: key.hasChildren 
+                                                ? theme.palette.primary.main
+                                                : theme.palette.text.primary,
+                                              fontWeight: key.hasChildren ? 600 : 400,
+                                              flexGrow: 1,
+                                              overflow: 'hidden',
+                                              textOverflow: 'ellipsis',
+                                              whiteSpace: 'nowrap',
+                                              display: 'flex',
+                                              alignItems: 'center'
+                                            }}
+                                          >
+                                            {key.name}
+                                            {key.isArray && (
+                                              <Box 
+                                                component="span" 
+                                                sx={{ 
+                                                  ml: 1,
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                  fontSize: '0.7rem',
+                                                  color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+                                                  border: '1px solid',
+                                                  borderColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
+                                                  borderRadius: '4px',
+                                                  padding: '0px 4px',
+                                                  height: '16px'
+                                                }}
+                                              >
+                                                [ ]
+                                              </Box>
+                                            )}
+                                          </Typography>
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                                      Upload a JSONL file to see keys
                                     </Typography>
                                   )}
                                 </Paper>
