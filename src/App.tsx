@@ -4,13 +4,6 @@ import {
   Paper,
   Button,
   Checkbox,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
   TextField,
   Box,
   IconButton,
@@ -71,6 +64,7 @@ import PromptTemplates from './components/PromptTemplates'  // Add this import
 import { default as CustomAboutDialog } from './components/dialogs/AboutDialog'  // Updated import location
 import ImportConfirmationDialog from './components/dialogs/ImportConfirmationDialog'  // Import the ImportConfirmationDialog component
 import ChunkingConfirmationDialog from './components/dialogs/ChunkingConfirmationDialog'  // Import the ChunkingConfirmationDialog component
+import TableView from './components/TableView'  // Add this import
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -3577,344 +3571,40 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
               minHeight: 0 // This is important for flex child scrolling
             }}>
               {isTableView(viewMode) ? (
-                <TableContainer sx={{ 
-                  height: '100%',
-                  overflow: 'auto',
-                  '&::-webkit-scrollbar': {
-                    width: '8px',
-                    height: '8px'
-                  },
-                  '&::-webkit-scrollbar-track': {
-                    background: 'transparent'
-                  },
-                  '&::-webkit-scrollbar-thumb': {
-                    background: theme.palette.mode === 'dark' 
-                      ? 'rgba(255, 255, 255, 0.1)' 
-                      : 'rgba(0, 0, 0, 0.1)',
-                    borderRadius: '100px',
-                    border: '2px solid transparent',
-                    backgroundClip: 'padding-box',
-                    '&:hover': {
-                      background: theme.palette.mode === 'dark' 
-                        ? 'rgba(255, 255, 255, 0.2)' 
-                        : 'rgba(0, 0, 0, 0.2)',
-                    }
-                  }
-                }}>
-                  <Table size="small" stickyHeader sx={{
-                    '& .MuiTableCell-root': {
-                      borderBottom: '1px solid',
-                      borderColor: theme.palette.divider,
-                      padding: '12px 16px',
-                      fontSize: '0.875rem',
-                      transition: 'all 0.2s ease',
-                    },
-                    '& .MuiTableHead-root .MuiTableCell-root': {
-                      fontWeight: 600,
-                      color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? alpha(theme.palette.background.paper, 0.9)
-                        : alpha(theme.palette.background.paper, 0.9),
-                      backdropFilter: 'blur(8px)',
-                      borderBottom: '2px solid',
-                      borderColor: theme.palette.divider,
-                      fontSize: '0.8125rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      height: '40px', // Match toolbar height
-                      padding: '0 16px', // Adjust padding
-                      whiteSpace: 'nowrap',
-                    },
-                    '& .MuiTableHead-root .MuiTableCell-root:first-of-type, & .MuiTableBody-root .MuiTableCell-root:first-of-type': {
-                      width: '48px',
-                      padding: '0 0 0 14px', // Add left padding to align with sidebar button
-                    },
-                    '& .MuiTableBody-root .MuiTableRow-root': {
-                      '&:hover': {
-                        backgroundColor: theme.palette.mode === 'dark'
-                          ? alpha(theme.palette.primary.main, 0.04)
-                          : alpha(theme.palette.primary.main, 0.04),
-                      },
-                    },
-                    '& .MuiCheckbox-root': {
-                      padding: '8px',
-                      borderRadius: '6px',
-                      color: theme.palette.mode === 'dark' 
-                        ? alpha(theme.palette.common.white, 0.3)
-                        : alpha(theme.palette.common.black, 0.2),
-                      '& .MuiSvgIcon-root': {
-                        fontSize: '1.1rem',
-                        borderRadius: '2px',
-                      },
-                      '&:hover': {
-                        backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                        color: theme.palette.mode === 'dark' 
-                          ? alpha(theme.palette.common.white, 0.4)
-                          : alpha(theme.palette.common.black, 0.3),
-                      },
-                      '&.Mui-checked, &.MuiCheckbox-indeterminate': {
-                        color: `${theme.palette.primary.main} !important`,
-                      },
-                    },
-                  }}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell 
-                          padding="checkbox"
-                          sx={{
-                            bgcolor: theme.palette.mode === 'dark' 
-                              ? 'rgba(255, 255, 255, 0.05)'
-                              : 'rgba(0, 0, 0, 0.02)',
-                            fontWeight: 600,
-                          }}
-                        >
-                          <Checkbox
-                            checked={qaPairs.length > 0 && qaPairs.every(qa => qa.selected)}
-                            indeterminate={qaPairs.some(qa => qa.selected) && !qaPairs.every(qa => qa.selected)}
-                            onChange={(e) => {
-                              setQaPairs(prev => prev.map(row => ({ ...row, selected: e.target.checked })))
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell 
-                          sx={{
-                            bgcolor: theme.palette.mode === 'dark' 
-                              ? 'rgba(255, 255, 255, 0.05)'
-                              : 'rgba(0, 0, 0, 0.02)',
-                            fontWeight: 600
-                          }}
-                        >
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1,
-                            color: theme.palette.mode === 'dark'
-                              ? theme.palette.primary.light
-                              : theme.palette.primary.dark
-                          }}>
-                            <ExtensionIcon sx={{ fontSize: '1.1rem' }} />
-                            Context
-                          </Box>
-                        </TableCell>
-                        <TableCell 
-                          sx={{
-                            bgcolor: theme.palette.mode === 'dark' 
-                              ? 'rgba(255, 255, 255, 0.05)'
-                              : 'rgba(0, 0, 0, 0.02)',
-                            fontWeight: 600
-                          }}
-                        >
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1,
-                            color: theme.palette.mode === 'dark'
-                              ? theme.palette.secondary.light
-                              : theme.palette.secondary.dark
-                          }}>
-                            <HelpOutlineIcon sx={{ fontSize: '1.1rem' }} />
-                            Question
-                          </Box>
-                        </TableCell>
-                        <TableCell 
-                          sx={{
-                            bgcolor: theme.palette.mode === 'dark' 
-                              ? 'rgba(255, 255, 255, 0.05)'
-                              : 'rgba(0, 0, 0, 0.02)',
-                            fontWeight: 600
-                          }}
-                        >
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1,
-                            color: theme.palette.mode === 'dark'
-                              ? theme.palette.success.light
-                              : theme.palette.success.dark
-                          }}>
-                            <LightbulbOutlinedIcon sx={{ fontSize: '1.1rem' }} />
-                            Answer
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {qaPairs
-                        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                        .map((qa, rowIndex) => {
-                          const isAnyExpanded = ['context', 'question', 'answer'].some(
-                            columnType => expandedCells[`${qa.id}-${columnType}`] || isCellGenerating(qa, columnType)
-                          );
-
-                          return (
-                            <TableRow 
-                              key={qa.id}
-                              sx={{
-                                bgcolor: theme.palette.mode === 'dark'
-                                  ? rowIndex % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
-                                  : rowIndex % 2 === 0 ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
-                                '&:hover': {
-                                  bgcolor: theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 255, 255, 0.05)'
-                                    : 'rgba(0, 0, 0, 0.05)',
-                                },
-                                borderBottom: '1px solid',
-                                borderColor: theme.palette.mode === 'dark' 
-                                  ? 'rgba(255, 255, 255, 0.05)'
-                                  : 'rgba(0, 0, 0, 0.05)',
-                              }}
-                            >
-                              <TableCell padding="checkbox">
-                                <Checkbox
-                                  checked={!!qa.selected}
-                                  onChange={(e) => {
-                                    setQaPairs((prev) =>
-                                      prev.map((row) =>
-                                        row.id === qa.id ? { ...row, selected: e.target.checked } : row
-                                      ),
-                                    );
-                                  }}
-                                />
-                              </TableCell>
-                              {['context', 'question', 'answer'].map((columnType) => {
-                                const isGenerating = isCellGenerating(qa, columnType);
-                                const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGenerating;
-                                const content = qa[columnType as keyof typeof qa] as string;
-                                
-                                return (
-                                  <TableCell 
-                                    key={columnType}
-                                    onClick={() => toggleCellExpansion(qa.id, columnType)}
-                                    sx={{ 
-                                      cursor: 'pointer',
-                                      transition: 'all 0.2s ease',
-                                      padding: '12px 16px',
-                                      minWidth: '200px',
-                                      maxWidth: '400px',
-                                      position: 'relative',
-                                      height: isAnyExpanded ? 'auto' : undefined,
-                                      '&:hover': {
-                                        backgroundColor: theme.palette.mode === 'dark' 
-                                          ? 'rgba(255, 255, 255, 0.04)'
-                                          : 'rgba(0, 0, 0, 0.02)',
-                                      },
-                                      '&:focus-within': {
-                                        backgroundColor: theme.palette.mode === 'dark' 
-                                          ? 'rgba(0, 0, 0, 0.3)'
-                                          : 'rgba(255, 255, 255, 0.6)',
-                                      },
-                                    }}
-                                  >
-                                    <Box sx={{ 
-                                      position: 'relative',
-                                      maxHeight: isAnyExpanded ? (isExpanded ? 'none' : '100%') : '4.5em',
-                                      overflow: isExpanded ? 'visible' : 'auto',
-                                      transition: 'all 0.2s ease',
-                                      height: isAnyExpanded ? (isExpanded ? 'auto' : '100%') : '4.5em',
-                                      '&::-webkit-scrollbar': {
-                                        width: '8px',
-                                        height: '8px',
-                                        display: 'block'
-                                      },
-                                      '&::-webkit-scrollbar-track': {
-                                        background: 'transparent'
-                                      },
-                                      '&::-webkit-scrollbar-thumb': {
-                                        background: theme.palette.mode === 'dark' 
-                                          ? 'rgba(255, 255, 255, 0.1)' 
-                                          : 'rgba(0, 0, 0, 0.1)',
-                                        borderRadius: '100px',
-                                        border: '2px solid transparent',
-                                        backgroundClip: 'padding-box',
-                                        '&:hover': {
-                                          background: theme.palette.mode === 'dark' 
-                                            ? 'rgba(255, 255, 255, 0.2)' 
-                                            : 'rgba(0, 0, 0, 0.2)',
-                                        }
-                                      },
-                                      overflowY: 'scroll'
-                                    }}>
-                                      <TextField
-                                        multiline
-                                        fullWidth
-                                        variant="standard"
-                                        value={content}
-                                        onChange={(e) => {
-                                          e.stopPropagation();
-                                          setQaPairs((prev) =>
-                                            prev.map((row) =>
-                                              row.id === qa.id ? { ...row, [columnType]: e.target.value } : row
-                                            )
-                                          )
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                        InputProps={{
-                                          disableUnderline: true,
-                                          sx: {
-                                            alignItems: 'flex-start',
-                                            padding: 0,
-                                            fontSize: '0.875rem',
-                                            lineHeight: 1.5,
-                                            minHeight: isExpanded ? 'auto' : '4.5em',
-                                            backgroundColor: 'transparent',
-                                            '& textarea': {
-                                              padding: 0,
-                                            }
-                                          }
-                                        }}
-                                        sx={{
-                                          width: '100%',
-                                          '& .MuiInputBase-root': {
-                                            padding: 0,
-                                          },
-                                        }}
-                                      />
-                                    </Box>
-                                  </TableCell>
-                                );
-                              })}
-                            </TableRow>
-                          );
-                        })}
-                      {qaPairs.length === 0 && !isGenerating && (
-                        <TableRow>
-                          <TableCell colSpan={4}>
-                            <Typography variant="body2" color="text.secondary" align="center">
-                              No chunks/Q&A yet. Upload &amp; chunk, then generate Q&A.
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                  {/* Add pagination controls */}
-                  <TablePagination
-                    component="div"
-                    count={qaPairs.length}
-                    page={page}
-                    onPageChange={(_, newPage) => {
-                      setPage(newPage);
-                      // Reset expanded cells when changing pages
-                      setExpandedCells({});
-                    }}
-                    rowsPerPage={rowsPerPage}
-                    onRowsPerPageChange={(event) => {
-                      setRowsPerPage(parseInt(event.target.value, 10));
-                      setPage(0);
-                      // Reset expanded cells when changing rows per page
-                      setExpandedCells({});
-                    }}
-                    rowsPerPageOptions={availableRowsPerPage}
-                    sx={{
-                      borderTop: 1,
-                      borderColor: theme.palette.divider,
-                      bgcolor: theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.background.paper, 0.6)
-                        : alpha(theme.palette.background.paper, 0.6),
-                      backdropFilter: 'blur(8px)',
-                    }}
-                  />
-                </TableContainer>
+                <TableView
+                  qaPairs={qaPairs}
+                  page={page}
+                  rowsPerPage={rowsPerPage}
+                  availableRowsPerPage={availableRowsPerPage}
+                  expandedCells={expandedCells}
+                  isGenerating={isGenerating}
+                  generationType={generationType}
+                  generationProgress={generationProgress}
+                  onPageChange={(newPage) => {
+                    setPage(newPage);
+                    // Reset expanded cells when changing pages
+                    setExpandedCells({});
+                  }}
+                  onRowsPerPageChange={(newRowsPerPage) => {
+                    setRowsPerPage(newRowsPerPage);
+                    setPage(0);
+                    // Reset expanded cells when changing rows per page
+                    setExpandedCells({});
+                  }}
+                  onToggleCellExpansion={toggleCellExpansion}
+                  onQAPairChange={setQaPairs}
+                  onSelectRow={(rowId, selected) => {
+                    setQaPairs((prev) =>
+                      prev.map((row) =>
+                        row.id === rowId ? { ...row, selected } : row
+                      )
+                    );
+                  }}
+                  onSelectAllRows={(selected) => {
+                    setQaPairs(prev => prev.map(row => ({ ...row, selected })));
+                  }}
+                  isCellGenerating={isCellGenerating}
+                />
               ) : (
                 <>
                   {/* Add navigation controls above the flashcard view */}

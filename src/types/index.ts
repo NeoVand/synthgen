@@ -1,4 +1,3 @@
-import { ChunkingAlgorithm } from '../utils/chunker';
 import { ReactNode } from 'react';
 
 // QA Pair for the main application data
@@ -9,8 +8,8 @@ export interface QAPair {
   answer: string;
   selected?: boolean;
   generating?: {
-    question?: boolean;
-    answer?: boolean;
+    question: boolean;
+    answer: boolean;
   };
 }
 
@@ -83,5 +82,5 @@ export interface ChunkOptions {
   chunkSize: number;
   chunkOverlap: number;
   windowSize: number;
-  algorithm: ChunkingAlgorithm;
+  algorithm: 'recursive' | 'line' | 'csv-tsv' | 'jsonl' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 } 
