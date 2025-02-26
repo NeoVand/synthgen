@@ -64,6 +64,7 @@ import { default as CustomAboutDialog } from './components/dialogs/AboutDialog' 
 import ImportConfirmationDialog from './components/dialogs/ImportConfirmationDialog'  // Import the ImportConfirmationDialog component
 import ChunkingConfirmationDialog from './components/dialogs/ChunkingConfirmationDialog'  // Import the ChunkingConfirmationDialog component
 import TableView from './components/TableView'  // Add this import
+import ExportOptionsDialog, { ExportOptions } from './components/dialogs/ExportOptionsDialog'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -183,6 +184,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [isOllamaConnected, setIsOllamaConnected] = useState<boolean>(false);
   const [showAboutDialog, setShowAboutDialog] = useState<boolean>(false);
   const [showImportDialog, setShowImportDialog] = useState<boolean>(false);
+  const [showExportDialog, setShowExportDialog] = useState<boolean>(false);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [showChunkingDialog, setShowChunkingDialog] = useState<boolean>(false);
   const [pendingChunks, setPendingChunks] = useState<string[]>([]);
@@ -1511,16 +1513,54 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       alert('No Q&A to export!')
       return
     }
-    let csv = 'context,question,answer\n'
-    qaPairs.forEach((qa) => {
-      const c = qa.context.replace(/"/g, '""')
-      const q = qa.question.replace(/"/g, '""')
-      const a = qa.answer.replace(/"/g, '""')
-      csv += `"${c}","${q}","${a}"\n`
-    })
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    saveAs(blob, 'qa_dataset.csv')
+    
+    // Show export options dialog instead of directly exporting
+    setShowExportDialog(true);
+  }
+  
+  const handleExportWithOptions = (options: ExportOptions) => {
+    if (qaPairs.length === 0) {
+      alert('No Q&A to export!')
+      return
+    }
+    
+    // Get selected columns and their custom names
+    const selectedColumns = options.columns.filter(col => col.selected);
+    
+    if (options.format === 'csv') {
+      // Generate CSV header with custom column names
+      let csv = selectedColumns.map(col => col.customName).join(',') + '\n';
+      
+      // Generate CSV data
+      qaPairs.forEach((qa) => {
+        const rowValues = selectedColumns.map(col => {
+          const value = qa[col.field as keyof typeof qa] || '';
+          // Escape quotes for CSV format
+          return `"${String(value).replace(/"/g, '""')}"`;
+        });
+        csv += rowValues.join(',') + '\n';
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      saveAs(blob, 'qa_dataset.csv');
+    } else {
+      // JSONL format
+      let jsonl = '';
+      
+      qaPairs.forEach((qa) => {
+        const jsonObject: Record<string, any> = {};
+        
+        // Use custom names as keys
+        selectedColumns.forEach(col => {
+          jsonObject[col.customName] = qa[col.field as keyof typeof qa] || '';
+        });
+        
+        jsonl += JSON.stringify(jsonObject) + '\n';
+      });
+      
+      const blob = new Blob([jsonl], { type: 'application/x-jsonlines;charset=utf-8;' });
+      saveAs(blob, 'qa_dataset.jsonl');
+    }
   }
 
   // Helper to toggle cell expansion
@@ -3417,7 +3457,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         />
                       </Button>
                     </Tooltip>
-                    <Tooltip title="Export all Q&A pairs to a CSV file that can be imported later">
+                    <Tooltip title="Export all Q&A pairs with custom format options (CSV or JSONL)">
                       <span>
                         <Button
                           size="small"
@@ -3627,6 +3667,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           setPendingChunks([]);
         }}
         pendingChunks={pendingChunks}
+      />
+      {/* Export options dialog */}
+      <ExportOptionsDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        onExport={handleExportWithOptions}
       />
     </Box>
   );
