@@ -173,3 +173,82 @@ button:not(.MuiButton-root) {
   color: #888;
 }
 
+.advanced-options-toggle {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.advanced-toggle-btn {
+  background-color: transparent;
+  border: 1px solid #ccc;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.advanced-toggle-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.advanced-export-options {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+.tooltip-container {
+  position: relative;
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.info-icon {
+  cursor: help;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.tooltip {
+  visibility: hidden;
+  width: 250px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -125px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 0.8rem;
+}
+
+.tooltip-container:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.form-group {
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.form-group input {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100px;
+}
+

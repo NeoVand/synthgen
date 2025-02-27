@@ -197,6 +197,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     seed: 42,
     numCtx: 4096
   });
+  const [showAdvancedExport, setShowAdvancedExport] = useState(false);
+  const [batchSize, setBatchSize] = useState(4);
 
   // Add About dialog component that uses our imported component
 
@@ -1527,12 +1529,25 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     // Get selected columns and their custom names
     const selectedColumns = options.columns.filter(col => col.selected);
     
+    // Create a copy of the data that we can shuffle if needed
+    // If options.data exists (from MNRL filtering), use that instead of qaPairs
+    let dataToExport = options.data ? [...options.data] : [...qaPairs];
+    
+    // Shuffle the data if requested in advanced options
+    if (options.shuffle) {
+      // Fisher-Yates shuffle algorithm
+      for (let i = dataToExport.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [dataToExport[i], dataToExport[j]] = [dataToExport[j], dataToExport[i]];
+      }
+    }
+    
     if (options.format === 'csv') {
       // Generate CSV header with custom column names
       let csv = selectedColumns.map(col => col.customName).join(',') + '\n';
       
       // Generate CSV data
-      qaPairs.forEach((qa) => {
+      dataToExport.forEach((qa) => {
         const rowValues = selectedColumns.map(col => {
           const value = qa[col.field as keyof typeof qa] || '';
           // Escape quotes for CSV format
@@ -1547,7 +1562,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       // JSONL format
       let jsonl = '';
       
-      qaPairs.forEach((qa) => {
+      dataToExport.forEach((qa) => {
         const jsonObject: Record<string, any> = {};
         
         // Use custom names as keys
@@ -1562,6 +1577,21 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       saveAs(blob, 'qa_dataset.jsonl');
     }
   }
+
+  // Add this function to App.tsx
+  const shuffleQAPairs = () => {
+    // Create a copy of the data
+    const shuffledPairs = [...qaPairs];
+    
+    // Fisher-Yates shuffle algorithm
+    for (let i = shuffledPairs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledPairs[i], shuffledPairs[j]] = [shuffledPairs[j], shuffledPairs[i]];
+    }
+    
+    // Update the state with shuffled data
+    setQaPairs(shuffledPairs);
+  };
 
   // Helper to toggle cell expansion
   const toggleCellExpansion = useCallback((rowId: number, columnType: string) => {
@@ -3673,6 +3703,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         open={showExportDialog}
         onClose={() => setShowExportDialog(false)}
         onExport={handleExportWithOptions}
+        onShuffle={shuffleQAPairs}
+        qaPairs={qaPairs}
+        ollamaSettings={ollamaSettings}
       />
     </Box>
   );
