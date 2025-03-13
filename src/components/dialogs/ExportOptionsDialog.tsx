@@ -191,14 +191,20 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
       addLog(`Total pairs to process: ${dataToProcess.length}`);
       
       // Process with the sliding window approach
-      const validPairs = [];
+      const validPairs: typeof qaPairs = [];
       let currentBatch = [];
       let index = 0;
       let batchNumber = 1;
       
+      // Keep track of which pairs we've already processed
+      const processedIds = new Set();
+      
       // Initialize the first batch
       currentBatch = dataToProcess.slice(0, Math.min(batchSize, dataToProcess.length));
       index = currentBatch.length;
+      
+      // Mark initial batch as processed
+      currentBatch.forEach(pair => processedIds.add(pair.id));
       
       addLog(`Batch #${batchNumber}: Processing initial batch with ${currentBatch.length} pairs (IDs: ${currentBatch.map(p => p.id).join(', ')})`);
       
@@ -215,11 +221,15 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
           addLog(`Batch #${batchNumber}: ${invalidIds.length} invalid pairs (IDs: ${invalidIds.join(', ')}) will be replaced`);
         }
         
-        // Add valid pairs to our result
-        validPairs.push(...validBatchPairs);
+        // Add valid pairs to our result (only if not already added)
+        for (const pair of validBatchPairs) {
+          if (!validPairs.some(p => p.id === pair.id)) {
+            validPairs.push(pair);
+          }
+        }
         
-        // Update progress
-        setProcessedCount(validPairs.length);
+        // Update progress - show how many pairs we've processed out of total
+        setProcessedCount(processedIds.size);
         
         // Calculate how many pairs were invalid
         const invalidCount = currentBatch.length - validBatchPairs.length;
@@ -228,6 +238,10 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
         if (invalidCount === 0 || index >= dataToProcess.length) {
           // Start a new batch with the next set of pairs
           currentBatch = dataToProcess.slice(index, index + batchSize);
+          
+          // Mark new pairs as processed
+          currentBatch.forEach(pair => processedIds.add(pair.id));
+          
           index += batchSize;
           batchNumber++;
           
@@ -243,6 +257,10 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
           const newPairsNeeded = Math.min(invalidCount, dataToProcess.length - index);
           if (newPairsNeeded > 0) {
             const newPairs = dataToProcess.slice(index, index + newPairsNeeded);
+            
+            // Mark new pairs as processed
+            newPairs.forEach(pair => processedIds.add(pair.id));
+            
             addLog(`Batch #${batchNumber}: Adding ${newPairs.length} new pairs (IDs: ${newPairs.map(p => p.id).join(', ')}) to replace invalid ones`);
             
             currentBatch = [...currentBatch, ...newPairs];
@@ -265,20 +283,23 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
       // Add any remaining single pair if it exists
       if (currentBatch.length === 1) {
         addLog(`Adding final remaining pair (ID: ${currentBatch[0].id})`);
-        validPairs.push(currentBatch[0]);
-        setProcessedCount(validPairs.length);
+        if (!validPairs.some(p => p.id === currentBatch[0].id)) {
+          validPairs.push(currentBatch[0]);
+        }
+        processedIds.add(currentBatch[0].id);
+        setProcessedCount(processedIds.size);
       }
       
       // Set the filtered pairs
       setFilteredPairs(validPairs);
       
       // Final log
-      addLog(`MNRL processing complete. ${validPairs.length} of ${dataToProcess.length} pairs passed validation.`);
+      addLog(`MNRL processing complete. ${validPairs.length} valid pairs from ${processedIds.size} processed pairs (out of ${dataToProcess.length} total).`);
       
       // Set success result
       setProcessResult({
         success: true,
-        message: `MNRL processing complete. ${validPairs.length} of ${dataToProcess.length} pairs passed validation.`,
+        message: `MNRL processing complete. ${validPairs.length} valid pairs from ${processedIds.size} processed pairs.`,
         filteredCount: validPairs.length
       });
     } catch (error) {
@@ -335,7 +356,6 @@ Note that although pair 1 and pair 2 violite the given rule, only one of them sh
 
 
 
-
 Please analyze the following batch of ${batch.length} anchor-positive pairs and identify any pairs that violate this rule.
 Return only the IDs of valid pairs that follow MNRL requirements and are to not be removed.
 
@@ -369,21 +389,23 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
       const data = await response.json();
       const responseText = data.response;
       
-      // Extract the JSON array from the response
-      const match = responseText.match(/\[[\d,\s]+\]/);
-      if (!match) {
-        console.warn("Could not parse valid IDs from response:", responseText);
-        return batch; // Return all if we can't parse
+      // Extract JSON array from response
+      let validIds: number[] = [];
+      try {
+        // Find anything that looks like a JSON array in the response
+        const match = responseText.match(/\[.*?\]/s);
+        if (match) {
+          validIds = JSON.parse(match[0]);
+        } else {
+          throw new Error("Could not find valid JSON array in response");
+        }
+      } catch (error) {
+        console.error("Error parsing Ollama response:", error);
+        throw new Error(`Failed to parse valid IDs from model response: ${responseText}`);
       }
       
-      try {
-        const validIds = JSON.parse(match[0]);
-        // Filter the batch to only include valid pairs
-        return batch.filter(pair => validIds.includes(pair.id));
-      } catch (parseError) {
-        console.warn("Error parsing JSON from response:", parseError);
-        return batch; // Return all if parsing fails
-      }
+      // Return only the pairs with valid IDs
+      return batch.filter(pair => validIds.includes(pair.id));
     } catch (error) {
       console.error("Error calling Ollama:", error);
       throw error;
@@ -654,6 +676,42 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                       Two columns must be selected for MNRL processing.
                       
                     </Typography>
+                  )}
+
+                  {/* Processing logs display */}
+                  {processingLogs.length > 0 && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                        Processing Logs:
+                      </Typography>
+                      <Paper 
+                        variant="outlined" 
+                        sx={{ 
+                          mt: 1, 
+                          p: 1, 
+                          maxHeight: '200px', 
+                          overflow: 'auto',
+                          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        {processingLogs.map((log, index) => (
+                          <Typography 
+                            key={index} 
+                            variant="caption" 
+                            component="div"
+                            sx={{ 
+                              fontFamily: 'monospace', 
+                              fontSize: '0.75rem',
+                              mb: 0.5,
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word'
+                            }}
+                          >
+                            {log}
+                          </Typography>
+                        ))}
+                      </Paper>
+                    </Box>
                   )}
                 </AccordionDetails>
               </Accordion>
