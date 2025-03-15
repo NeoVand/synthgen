@@ -13,6 +13,9 @@ export interface QAPair {
   };
 }
 
+// Model Provider type
+export type ModelProvider = 'ollama' | 'azure';
+
 // Ollama settings types
 export interface OllamaSettings {
   model: string;
@@ -21,6 +24,18 @@ export interface OllamaSettings {
   useFixedSeed: boolean;
   seed: number;
   numCtx: number;
+}
+
+// Azure OpenAI settings types
+export interface AzureOpenAISettings {
+  endpoint: string;
+  apiVersion: string;
+  deploymentName: string;
+  authMethod: 'apiKey' | 'aad';
+  apiKey?: string;
+  temperature: number;
+  topP: number;
+  maxTokens: number;
 }
 
 // Error type for Ollama

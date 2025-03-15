@@ -58,351 +58,140 @@ export const useOllamaGeneration = () => {
       // Process the streaming response
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error('Response body is null');
+        throw new Error('Response body is not readable');
       }
 
       let fullText = '';
-      let decoder = new TextDecoder();
-
+      const decoder = new TextDecoder();
+      
       while (true) {
-        // Check if generation should be stopped
         if (shouldStopGeneration) {
-          abortControllerRef.current?.abort();
           break;
         }
-
+        
         const { done, value } = await reader.read();
         if (done) {
           break;
         }
 
-        // Decode and parse the chunk
         const chunk = decoder.decode(value);
         const lines = chunk.split('\n').filter(line => line.trim() !== '');
-        
+
         for (const line of lines) {
           try {
-            const parsed = JSON.parse(line);
+            const parsedLine = JSON.parse(line);
+            const token = parsedLine.response || '';
             
-            if (parsed.response) {
-              const token = parsed.response;
+            if (token) {
               fullText += token;
-              
-              // Call the token callback if provided
-              onToken?.(token);
+              if (onToken) {
+                onToken(token);
+              }
             }
             
-            // If we received the "done" flag, break the loop
-            if (parsed.done) {
-              break;
+            // If done is true, we've reached the end of the stream
+            if (parsedLine.done) {
+              if (onComplete) {
+                onComplete(fullText);
+              }
+              return fullText;
             }
-          } catch (err) {
-            console.error('Error parsing streaming response:', err);
+          } catch (e) {
+            console.error('Error parsing JSON:', e);
           }
         }
       }
 
-      // Call the complete callback
-      onComplete?.(fullText);
+      if (onComplete) {
+        onComplete(fullText);
+      }
       
       return fullText;
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('Generation aborted');
-        return '';
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('Ollama generation error:', error);
       }
-      console.error('Error generating text:', err);
-      throw err;
+      throw error;
     } finally {
       abortControllerRef.current = null;
     }
   }, [ollamaSettings, abortControllerRef, shouldStopGeneration]);
 
-  // Generate summary
-  const generateSummary = useCallback(async (summaryPrompt: string, text: string): Promise<string> => {
+  // Generate summary function
+  const generateSummary = useCallback(async (text: string, prompt: string): Promise<string> => {
     setIsGenerating(true);
     setGenerationType('summary');
-    
+
     try {
-      const fullPrompt = `${summaryPrompt}\n\n${text}`;
-      let summary = '';
-      
-      await generateText({
+      const fullPrompt = `${prompt}\n\n${text}`;
+      const summary = await generateText({
         prompt: fullPrompt,
-        onToken: (token) => {
-          summary += token;
+        onToken: () => {
+          // Update progress incrementally
+          setGenerationProgress({ completed: 1, total: 1 });
         },
       });
-      
       return summary;
     } finally {
       setIsGenerating(false);
       setGenerationType(null);
     }
-  }, [generateText, setIsGenerating, setGenerationType]);
+  }, [generateText, setIsGenerating, setGenerationType, setGenerationProgress]);
 
-  // Generate a single question
-  const generateQuestion = useCallback(async (row: QAPair, promptTemplate: string): Promise<string> => {
-    try {
-      // Skip if already generating
-      if (row.generating?.question) return '';
-      
-      // Update the row to indicate generation is in progress
-      const updatedQA: QAPair[] = qaPairs.map(qa => 
-        qa.id === row.id 
-          ? { 
-              ...qa, 
-              generating: { 
-                question: true, 
-                answer: qa.generating?.answer || false 
-              } 
-            } 
-          : qa
-      );
-      setQaPairs(updatedQA);
-      
-      // Process the prompt template
-      const processedPrompt = replacePlaceholders(
-        promptTemplate, 
-        { summary: docSummary, chunk: row.context, question: '' }
-      );
-      
-      // Generate the question
-      let question = '';
-      await generateText({
-        prompt: processedPrompt,
-        onToken: (token) => {
-          question += token;
-        },
-        onComplete: (fullText) => {
-          // Update the QA pair with the generated question
-          const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
-            qa.id === row.id 
-              ? { 
-                  ...qa, 
-                  question: fullText, 
-                  generating: { 
-                    question: false, 
-                    answer: qa.generating?.answer || false 
-                  } 
-                } 
-              : qa
-          );
-          setQaPairs(finalUpdatedQA);
-        }
-      });
-      
-      return question;
-    } catch (err) {
-      console.error('Error generating question:', err);
-      
-      // Update the QA pair to indicate generation has stopped
-      const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
-        qa.id === row.id 
-          ? { 
-              ...qa, 
-              generating: { 
-                question: false, 
-                answer: qa.generating?.answer || false 
-              } 
-            } 
-          : qa
-      );
-      setQaPairs(finalUpdatedQA);
-      
-      throw err;
-    }
-  }, [qaPairs, setQaPairs, generateText, docSummary]);
+  // Generate question function
+  const generateQuestion = useCallback(async (context: string, summaryText: string, prompt: string): Promise<string> => {
+    const fullPrompt = `${prompt}\n\nText: ${context}\n\nSummary: ${summaryText}\n\nQuestion:`;
+    return generateText({ prompt: fullPrompt });
+  }, [generateText]);
 
-  // Generate a single answer
-  const generateAnswer = useCallback(async (row: QAPair, promptTemplate: string): Promise<string> => {
-    try {
-      // Skip if already generating or no question
-      if (row.generating?.answer || !row.question) return '';
-      
-      // Update the row to indicate generation is in progress
-      const updatedQA: QAPair[] = qaPairs.map(qa => 
-        qa.id === row.id 
-          ? { 
-              ...qa, 
-              generating: { 
-                answer: true, 
-                question: qa.generating?.question || false 
-              } 
-            } 
-          : qa
-      );
-      setQaPairs(updatedQA);
-      
-      // Process the prompt template
-      const processedPrompt = replacePlaceholders(
-        promptTemplate, 
-        { summary: docSummary, chunk: row.context, question: row.question }
-      );
-      
-      // Generate the answer
-      let answer = '';
-      await generateText({
-        prompt: processedPrompt,
-        onToken: (token) => {
-          answer += token;
-        },
-        onComplete: (fullText) => {
-          // Update the QA pair with the generated answer
-          const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
-            qa.id === row.id 
-              ? { 
-                  ...qa, 
-                  answer: fullText, 
-                  generating: { 
-                    answer: false, 
-                    question: qa.generating?.question || false 
-                  } 
-                } 
-              : qa
-          );
-          setQaPairs(finalUpdatedQA);
-        }
-      });
-      
-      return answer;
-    } catch (err) {
-      console.error('Error generating answer:', err);
-      
-      // Update the QA pair to indicate generation has stopped
-      const finalUpdatedQA: QAPair[] = qaPairs.map(qa => 
-        qa.id === row.id 
-          ? { 
-              ...qa, 
-              generating: { 
-                answer: false, 
-                question: qa.generating?.question || false 
-              } 
-            } 
-          : qa
-      );
-      setQaPairs(finalUpdatedQA);
-      
-      throw err;
-    }
-  }, [qaPairs, setQaPairs, generateText, docSummary]);
+  // Generate answer function
+  const generateAnswer = useCallback(async (context: string, summaryText: string, question: string, prompt: string): Promise<string> => {
+    const fullPrompt = `${prompt}\n\nText: ${context}\n\nSummary: ${summaryText}\n\nQuestion: ${question}\n\nAnswer:`;
+    return generateText({ prompt: fullPrompt });
+  }, [generateText]);
 
-  // Generate both question and answer for a QA pair
-  const generateQA = useCallback(async (row: QAPair, questionPrompt: string, answerPrompt: string): Promise<{ question: string; answer: string }> => {
-    try {
-      // Generate question first
-      const question = await generateQuestion(row, questionPrompt);
-      
-      // If question generation succeeded, generate answer
-      if (question) {
-        const updatedRow = { ...row, question };
-        const answer = await generateAnswer(updatedRow, answerPrompt);
-        return { question, answer };
-      }
-      
-      return { question: '', answer: '' };
-    } catch (err) {
-      console.error('Error in generateQA:', err);
-      return { question: '', answer: '' };
-    }
-  }, [generateQuestion, generateAnswer]);
-
-  // Generate multiple QA pairs
-  const generateMultipleQA = useCallback(async (
-    rows: QAPair[], 
-    questionPrompt: string, 
-    answerPrompt: string
-  ): Promise<void> => {
+  // Generate QA pairs function
+  const generateQA = useCallback(async (
+    chunkList: string[],
+    summaryText: string,
+    questionPrompt: string,
+    answerPrompt: string,
+    onProgress: (progress: { completed: number; total: number }) => void
+  ): Promise<QAPair[]> => {
     setIsGenerating(true);
     setGenerationType('qa');
-    setGenerationProgress({ completed: 0, total: rows.length });
     
+    const results: QAPair[] = [];
     try {
-      let completed = 0;
-      
-      for (const row of rows) {
-        // Check if generation should be stopped
+      for (let i = 0; i < chunkList.length; i++) {
         if (shouldStopGeneration) {
           break;
         }
         
-        await generateQA(row, questionPrompt, answerPrompt);
+        const chunk = chunkList[i];
         
-        // Update progress
-        completed++;
-        setGenerationProgress({ completed, total: rows.length });
+        // Generate question
+        const question = await generateQuestion(chunk, summaryText, questionPrompt);
+        
+        // Generate answer
+        const answer = await generateAnswer(chunk, summaryText, question, answerPrompt);
+        
+        results.push({
+          id: i,
+          context: chunk,
+          question,
+          answer,
+        });
+        
+        onProgress({ completed: i + 1, total: chunkList.length });
       }
     } finally {
       setIsGenerating(false);
       setGenerationType(null);
-      setGenerationProgress({ completed: 0, total: 0 });
     }
-  }, [generateQA, setIsGenerating, setGenerationType, setGenerationProgress, shouldStopGeneration]);
-
-  // Generate multiple questions only
-  const generateMultipleQuestions = useCallback(async (
-    rows: QAPair[], 
-    questionPrompt: string
-  ): Promise<void> => {
-    setIsGenerating(true);
-    setGenerationType('question');
-    setGenerationProgress({ completed: 0, total: rows.length });
     
-    try {
-      let completed = 0;
-      
-      for (const row of rows) {
-        // Check if generation should be stopped
-        if (shouldStopGeneration) {
-          break;
-        }
-        
-        await generateQuestion(row, questionPrompt);
-        
-        // Update progress
-        completed++;
-        setGenerationProgress({ completed, total: rows.length });
-      }
-    } finally {
-      setIsGenerating(false);
-      setGenerationType(null);
-      setGenerationProgress({ completed: 0, total: 0 });
-    }
-  }, [generateQuestion, setIsGenerating, setGenerationType, setGenerationProgress, shouldStopGeneration]);
-
-  // Generate multiple answers only
-  const generateMultipleAnswers = useCallback(async (
-    rows: QAPair[], 
-    answerPrompt: string
-  ): Promise<void> => {
-    setIsGenerating(true);
-    setGenerationType('answer');
-    setGenerationProgress({ completed: 0, total: rows.length });
-    
-    try {
-      let completed = 0;
-      
-      for (const row of rows) {
-        // Check if generation should be stopped
-        if (shouldStopGeneration) {
-          break;
-        }
-        
-        // Only generate answer if there's a question
-        if (row.question) {
-          await generateAnswer(row, answerPrompt);
-        }
-        
-        // Update progress
-        completed++;
-        setGenerationProgress({ completed, total: rows.length });
-      }
-    } finally {
-      setIsGenerating(false);
-      setGenerationType(null);
-      setGenerationProgress({ completed: 0, total: 0 });
-    }
-  }, [generateAnswer, setIsGenerating, setGenerationType, setGenerationProgress, shouldStopGeneration]);
+    return results;
+  }, [generateQuestion, generateAnswer, setIsGenerating, setGenerationType, shouldStopGeneration]);
 
   return {
     generateText,
@@ -410,8 +199,5 @@ export const useOllamaGeneration = () => {
     generateQuestion,
     generateAnswer,
     generateQA,
-    generateMultipleQA,
-    generateMultipleQuestions,
-    generateMultipleAnswers,
   };
 }; 

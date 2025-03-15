@@ -9,7 +9,9 @@ import {
   Section,
   CSVColumn,
   JSONLKey,
-  ChunkOptions
+  ChunkOptions,
+  ModelProvider,
+  AzureOpenAISettings
 } from '../types';
 import { ChunkingAlgorithm } from '../utils/chunker';
 
@@ -22,6 +24,10 @@ interface AppContextProps {
   docSummary: string;
   setDocSummary: (summary: string) => void;
 
+  // Model provider
+  modelProvider: ModelProvider;
+  setModelProvider: (provider: ModelProvider) => void;
+
   // Ollama state
   ollamaSettings: OllamaSettings;
   setOllamaSettings: (settings: OllamaSettings) => void;
@@ -29,6 +35,10 @@ interface AppContextProps {
   setIsOllamaConnected: (connected: boolean) => void;
   ollamaError: OllamaError | null;
   setOllamaError: (error: OllamaError | null) => void;
+
+  // Azure OpenAI state
+  azureSettings: AzureOpenAISettings;
+  setAzureSettings: (settings: AzureOpenAISettings) => void;
 
   // QA pairs and generation
   qaPairs: QAPair[];
@@ -109,6 +119,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, defaultSecti
   const [fileName, setFileName] = useState<string>('');
   const [docSummary, setDocSummary] = useState<string>('');
 
+  // Model provider
+  const [modelProvider, setModelProvider] = useState<ModelProvider>('ollama');
+
   // Ollama state
   const [ollamaSettings, setOllamaSettings] = useState<OllamaSettings>({
     model: '',
@@ -120,6 +133,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, defaultSecti
   });
   const [isOllamaConnected, setIsOllamaConnected] = useState<boolean>(false);
   const [ollamaError, setOllamaError] = useState<OllamaError | null>(null);
+
+  // Azure OpenAI state
+  const [azureSettings, setAzureSettings] = useState<AzureOpenAISettings>({
+    endpoint: '',
+    apiVersion: '2023-12-01-preview',
+    deploymentName: '',
+    authMethod: 'apiKey',
+    apiKey: '',
+    temperature: 0.7,
+    topP: 0.9,
+    maxTokens: 512
+  });
 
   // QA pairs and generation
   const [qaPairs, setQaPairs] = useState<QAPair[]>([]);
@@ -184,6 +209,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, defaultSecti
         docSummary,
         setDocSummary,
 
+        // Model provider
+        modelProvider,
+        setModelProvider,
+
         // Ollama state
         ollamaSettings,
         setOllamaSettings,
@@ -191,6 +220,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, defaultSecti
         setIsOllamaConnected,
         ollamaError,
         setOllamaError,
+
+        // Azure OpenAI state
+        azureSettings,
+        setAzureSettings,
 
         // QA pairs and generation
         qaPairs,

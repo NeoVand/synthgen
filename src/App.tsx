@@ -56,7 +56,6 @@ GlobalWorkerOptions.workerSrc = `${window.location.origin}${import.meta.env.BASE
 // DOCX
 import { renderAsync } from 'docx-preview'
 
-import OllamaSettings from './components/OllamaSettings'
 import FlashcardView from './components/FlashcardView'
 import OllamaConnectionModal from './components/OllamaConnectionModal'
 import PromptTemplates from './components/PromptTemplates'  // Add this import
@@ -65,6 +64,8 @@ import ImportConfirmationDialog from './components/dialogs/ImportConfirmationDia
 import ChunkingConfirmationDialog from './components/dialogs/ChunkingConfirmationDialog'  // Import the ChunkingConfirmationDialog component
 import TableView from './components/TableView'  // Add this import
 import ExportOptionsDialog, { ExportOptions } from './components/dialogs/ExportOptionsDialog'
+import ModelSettings from './components/ModelSettings'
+import { ModelProvider, AzureOpenAISettings as AzureOpenAISettingsType } from './types'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
@@ -196,6 +197,17 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     useFixedSeed: false,
     seed: 42,
     numCtx: 4096
+  });
+  const [, setModelProvider] = useState<ModelProvider>('ollama');
+  const [azureSettings, setAzureSettings] = useState<AzureOpenAISettingsType>({
+    endpoint: '',
+    apiVersion: '2023-12-01-preview',
+    deploymentName: '',
+    authMethod: 'apiKey',
+    apiKey: '',
+    temperature: 0.7,
+    topP: 0.9,
+    maxTokens: 512
   });
 
   // Add About dialog component that uses our imported component
@@ -402,6 +414,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       setOllamaSettings(newSettings)
     }
   }
+  
+  // Handler for Azure settings changes
+  const handleAzureSettingsChange = (newSettings: AzureOpenAISettingsType) => {
+    setAzureSettings(newSettings);
+  };
 
   //------------------------------------------------------------------------------------
   // 2. File Upload
@@ -2376,11 +2393,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         )}
                         {section.id === 'section-modelSettings' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
-                            <OllamaSettings 
-                              onSettingsSave={handleSettingsSave} 
-                              autoApply 
+                            <ModelSettings 
+                              onProviderChange={setModelProvider}
+                              ollamaSettings={ollamaSettings}
+                              onOllamaSettingsChange={handleSettingsSave}
+                              azureSettings={azureSettings}
+                              onAzureSettingsChange={handleAzureSettingsChange}
                               hideTitle
-                              initialSettings={ollamaSettings}
                               onHelp={handleConnectionHelp}
                             />
                           </Box>
