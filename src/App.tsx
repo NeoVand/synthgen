@@ -197,8 +197,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     seed: 42,
     numCtx: 4096
   });
-  const [showAdvancedExport, setShowAdvancedExport] = useState(false);
-  const [batchSize, setBatchSize] = useState(4);
+  // Commented out unused state variables
+  // const [showAdvancedExport, setShowAdvancedExport] = useState(false);
+  // const [batchSize, setBatchSize] = useState(4);
 
   // Add About dialog component that uses our imported component
 
