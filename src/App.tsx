@@ -12,6 +12,7 @@ import {
   alpha,
   Tooltip,
   MenuItem,
+  FormControlLabel,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
@@ -174,6 +175,9 @@ const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
 
 // Import the replacePlaceholders helper
 import { replacePlaceholders } from './config/promptTemplates';
+
+// Add this import with the other icon imports
+import ImageIcon from '@mui/icons-material/Image'
 
 const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const theme = useTheme();
@@ -359,6 +363,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Update the viewMode state declaration
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+
+  // Add state for processImages near the top of the component with other state declarations
+  const [processImages, setProcessImages] = useState<boolean>(false);
 
   // Add resize handler
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -2380,28 +2387,115 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         {/* Render section content based on section.id */}
                         {section.id === 'section-upload' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
+                            <Box sx={{ mb: 2 }}>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                mb: 1 
+                              }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                    Document
+                                  </Typography>
+                                  <Tooltip title="Upload a document (PDF, DOCX, TXT, CSV, JSONL) to generate Q&A pairs from." placement="right">
+                                    <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                      <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              </Box>
+                              
+                              {/* Add file selection display with checkbox when a file is uploaded */}
+                              {fileName && (
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  mb: 1.5,
+                                  p: 1,
+                                  borderRadius: '6px',
+                                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+                                }}>
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontSize: '0.875rem',
+                                      color: theme.palette.text.primary,
+                                      flexGrow: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {fileName}
+                                  </Typography>
+                                </Box>
+                              )}
+                              
+                              <Button
+                                variant="outlined"
+                                component="label"
+                                fullWidth
+                                startIcon={<UploadFileIcon />}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 500,
+                                  borderRadius: '8px',
+                                  py: 1,
+                                  borderColor: theme.palette.mode === 'dark' 
+                                    ? alpha(theme.palette.primary.main, 0.5)
+                                    : alpha(theme.palette.primary.main, 0.3),
+                                  color: theme.palette.primary.main,
+                                  '&:hover': {
+                                    borderColor: theme.palette.primary.main,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.05)
+                                  }
+                                }}
+                              >
+                                Upload Document
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept=".pdf,.docx,.txt,.md,.csv,.tsv,.jsonl,.json"
+                                  onChange={handleFileUpload}
+                                />
+                              </Button>
+                            </Box>
                             <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
                               Accepts .txt, .csv, .pdf, .docx, .md, .jsonl, .json
                             </Typography>
-                            <Button 
-                              variant="contained" 
-                              component="label" 
-                              fullWidth
-                              startIcon={<UploadFileIcon />}
-                              color="primary"
-                            >
-                              Choose File
-                              <input
-                                type="file"
-                                accept=".pdf,.docx,.csv,.txt,.md,.jsonl,.json"
-                                hidden
-                                onChange={handleFileUpload}
-                              />
-                            </Button>
+                            
+                            {/* Add Process Images checkbox at the bottom of the document upload section */}
                             {fileName && (
-                              <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
-                                Selected: {fileName}
-                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      checked={processImages}
+                                      onChange={(e) => setProcessImages(e.target.checked)}
+                                      sx={{
+                                        '&.Mui-checked': {
+                                          color: theme.palette.primary.main,
+                                        }
+                                      }}
+                                    />
+                                  }
+                                  label={
+                                    <Typography sx={{ 
+                                      fontSize: '0.875rem',
+                                      fontWeight: 500,
+                                      color: theme.palette.text.secondary
+                                    }}>
+                                      Process Images
+                                    </Typography>
+                                  }
+                                />
+                                <Tooltip title="Extract and process images from the document." placement="right">
+                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             )}
                           </Box>
                         )}
