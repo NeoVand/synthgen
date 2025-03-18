@@ -366,6 +366,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Add state for processImages near the top of the component with other state declarations
   const [processImages, setProcessImages] = useState<boolean>(false);
+  const [originalFileData, setOriginalFileData] = useState<ArrayBuffer | null>(null);
 
   // Add resize handler
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -425,6 +426,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     try {
       let textContent = ''
       if (ext === 'pdf') {
+        // Store the file data for later use
+        const arrayBuffer = await file.arrayBuffer()
+        setOriginalFileData(arrayBuffer)
         textContent = await parsePdfFile(file)
       } else if (ext === 'docx') {
         textContent = await parseDocxFile(file)
@@ -755,6 +759,49 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
     try {
       let chunks: string[] = [];
+
+      // If it's a PDF and processImages is enabled, extract images first
+      if (fileName?.toLowerCase().endsWith('.pdf') && processImages && originalFileData) {
+        try {
+          // Initialize PDF.js 
+          const pdfDoc = await getDocument({ data: originalFileData }).promise
+          let totalImages = 0
+          
+          console.log(`Processing PDF with ${pdfDoc.numPages} pages for images`)
+          
+          // Simpler approach - just detect the presence of image operations
+          for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+            try {
+              const page = await pdfDoc.getPage(pageNum)
+              const operatorList = await page.getOperatorList()
+              
+              // Count image operations without trying to load them
+              let pageImageCount = 0
+              for (let i = 0; i < operatorList.fnArray.length; i++) {
+                if (operatorList.fnArray[i] === PDFJS.OPS.paintImageXObject) {
+                  pageImageCount++
+                }
+              }
+              
+              if (pageImageCount > 0) {
+                totalImages += pageImageCount
+                console.log(`Detected ${pageImageCount} images on page ${pageNum}`)
+              }
+            } catch (pageError) {
+              console.warn(`Error processing page ${pageNum} for images:`, pageError)
+            }
+          }
+          
+          if (totalImages > 0) {
+            console.log(`Total images detected in PDF: ${totalImages}`)
+            console.log(`To view the images, please use a PDF viewer application`)
+          } else {
+            console.log(`No images detected in the PDF document`)
+          }
+        } catch (pdfError) {
+          console.error(`Error processing PDF for images:`, pdfError)
+        }
+      }
 
       switch (chunkingAlgorithm) {
         case 'recursive':
