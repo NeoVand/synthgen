@@ -765,69 +765,359 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       // If it's a PDF and processImages is enabled, extract images first
       if (fileName?.toLowerCase().endsWith('.pdf') && processImages && originalFileData) {
         try {
-          // Initialize PDF.js 
-          const pdfDoc = await getDocument({ data: originalFileData }).promise
-          let totalImages = 0
+          // Initialize PDF.js
+          const pdfDoc = await getDocument({ data: originalFileData }).promise;
+          let totalImages = 0;
           const extractedImagesList: Array<{name: string, dataUrl: string}> = [];
           
-          console.log(`Processing PDF with ${pdfDoc.numPages} pages for images`)
+          console.log(`Processing PDF with ${pdfDoc.numPages} pages for images`);
           
-          // Extract each page as an image if it contains image operations
-          for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-            try {
-              const page = await pdfDoc.getPage(pageNum)
-              const operatorList = await page.getOperatorList()
-              
-              // Check if this page has any images
-              let hasImages = false;
-              for (let i = 0; i < operatorList.fnArray.length; i++) {
-                if (operatorList.fnArray[i] === PDFJS.OPS.paintImageXObject) {
-                  hasImages = true;
-                  break;
-                }
-              }
-              
-              if (hasImages) {
-                // Create a canvas for the entire page
+          // Universal image extraction approach - tries multiple methods and handles different PDF structures
+          const extractImagesFromPDF = async () => {
+            // First pre-render all pages to force PDF.js to load all objects
+            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+              try {
+                const page = await pdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 1.0 });
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
-                  // Get the viewport at a reasonable scale
-                  const viewport = page.getViewport({ scale: 1.5 });
-                  
-                  // Set canvas dimensions
                   canvas.width = viewport.width;
                   canvas.height = viewport.height;
-                  
-                  // Render the page to the canvas
-                  await page.render({
-                    canvasContext: ctx,
-                    viewport
-                  }).promise;
-                  
-                  // Convert to data URL and add to the list
-                  const dataUrl = canvas.toDataURL('image/png');
-                  extractedImagesList.push({
-                    name: `page-${pageNum}.png`,
-                    dataUrl
-                  });
-                  
-                  totalImages++;
-                  console.log(`Extracted page ${pageNum} with images`);
+                  await page.render({ canvasContext: ctx, viewport }).promise;
+                  console.log(`Pre-rendered page ${pageNum}`);
                 }
+              } catch (err) {
+                console.warn(`Error pre-rendering page ${pageNum}:`, err);
               }
-            } catch (pageError) {
-              console.warn(`Error processing page ${pageNum} for images:`, pageError);
             }
-          }
+            
+            // Now extract the images using multiple methods
+            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+              try {
+                const page = await pdfDoc.getPage(pageNum);
+                const operatorList = await page.getOperatorList();
+                
+                // Keep track of which images we've already processed on this page
+                const processedImages = new Set();
+                
+                // Find all image operations in the page
+                for (let i = 0; i < operatorList.fnArray.length; i++) {
+                  if (operatorList.fnArray[i] === PDFJS.OPS.paintImageXObject) {
+                    const imgArgs = operatorList.argsArray[i];
+                    const imageRef = imgArgs[0]; // Image reference name
+                    
+                    // Skip if we've already processed this image
+                    if (processedImages.has(imageRef)) {
+                      continue;
+                    }
+                    processedImages.add(imageRef);
+                    
+                    // Try different approaches to extract the image
+                    let extractionSuccess = false;
+                    
+                    // Approach 1: Direct extraction from PDF.js object store
+                    try {
+                      let imageObj = null;
+                      
+                      // Check if the image is in common objects
+                      if (page.commonObjs.has(imageRef)) {
+                        imageObj = page.commonObjs.get(imageRef);
+                        console.log(`Found image ${imageRef} in commonObjs`);
+                      } 
+                      // Check if it's in page-specific objects
+                      else if (page.objs.has(imageRef)) {
+                        imageObj = page.objs.get(imageRef);
+                        console.log(`Found image ${imageRef} in objs`);
+                      }
+                      
+                      // Debug what we found
+                      if (imageObj) {
+                        console.log(`Image object properties for ${imageRef}:`, 
+                          Object.keys(imageObj).join(', '));
+                        
+                        if (imageObj.data) {
+                          console.log(`Image data type: ${imageObj.data.constructor.name}, length: ${imageObj.data.length || 'unknown'}`);
+                        }
+                        
+                        // Try to extract the bitmap directly, since we're seeing objects with bitmap property
+                        if (imageObj.bitmap) {
+                          try {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            
+                            if (ctx && imageObj.width > 0 && imageObj.height > 0) {
+                              // Set canvas dimensions
+                              canvas.width = imageObj.width;
+                              canvas.height = imageObj.height;
+                              
+                              // Try different ways to access the bitmap
+                              try {
+                                // Method 1: Try to access the internal bitmap data in PDF.js
+                                // This goes beyond the standard API and tries to access internals
+                                // Get raw bitmap data if available through non-standard means
+                                if (typeof imageObj._bitmap !== 'undefined') {
+                                  console.log(`Found _bitmap property on ${imageRef}`);
+                                  ctx.drawImage(imageObj._bitmap, 0, 0);
+                                } else if (typeof imageObj.bitmap === 'function') {
+                                  // Some PDFs have bitmap as a function
+                                  console.log(`Found bitmap function on ${imageRef}`);
+                                  const bitmapResult = imageObj.bitmap();
+                                  ctx.drawImage(bitmapResult, 0, 0);
+                                } else {
+                                  // Standard approach - direct property access
+                                  console.log(`Using standard bitmap property on ${imageRef}`);
+                                  ctx.drawImage(imageObj.bitmap, 0, 0);
+                                }
+                              } catch (accessErr) {
+                                console.warn(`Direct bitmap access failed, trying reconstruction: ${accessErr}`);
+                                
+                                try {
+                                  // Method 2: Try to reconstruct the bitmap from raw data properties
+                                  // PDF.js sometimes keeps raw data in internal properties
+                                  
+                                  // If this PDF has a custom structure we saw in the logs
+                                  if (imageObj.width && imageObj.height && imageObj.dataLen && imageObj.ref) {
+                                    console.log(`Attempting raw reconstruction for ${imageRef} using PDF structure hints`);
+                                    
+                                    // Check if there's a special internal structure we can access
+                                    const internalData = (imageObj as any)._raw || 
+                                                       (imageObj as any)._data || 
+                                                       (imageObj as any).data;
+                                    
+                                    if (internalData) {
+                                      // If we have some kind of data, try to draw from various potential formats
+                                      try {
+                                        // Try creating a blob URL
+                                        const blob = new Blob([internalData], { type: 'image/jpeg' });
+                                        const img = new Image();
+                                        img.src = URL.createObjectURL(blob);
+                                        
+                                        // We need to wait for the image to load
+                                        await new Promise<void>((resolve) => {
+                                          img.onload = () => {
+                                            ctx.drawImage(img, 0, 0, imageObj.width, imageObj.height);
+                                            resolve();
+                                          };
+                                          img.onerror = () => {
+                                            console.warn(`Failed to load blob URL image for ${imageRef}`);
+                                            resolve();
+                                          };
+                                        });
+                                      } catch (blobErr) {
+                                        console.warn(`Blob approach failed: ${blobErr}`);
+                                      }
+                                    }
+                                  }
+                                } catch (reconstructionErr) {
+                                  console.warn(`Reconstruction failed: ${reconstructionErr}`);
+                                  
+                                  // Method 3: Last resort - try to trick PDF.js into rendering just this image
+                                  try {
+                                    console.log(`Attempting advanced direct rendering for ${imageRef}`);
+                                    
+                                    // Here we create a new in-memory canvas larger than the image
+                                    // to account for potential transformations
+                                    const tempCanvas = document.createElement('canvas');
+                                    const tempCtx = tempCanvas.getContext('2d');
+                                    
+                                    if (tempCtx) {
+                                      // Make it a bit larger than the image to ensure we capture everything
+                                      const padding = 20;
+                                      tempCanvas.width = imageObj.width + padding*2;
+                                      tempCanvas.height = imageObj.height + padding*2;
+                                      
+                                      // Get a sub-object ref that might be directly usable
+                                      const ref = imageObj.ref || imageRef;
+                                      
+                                      // Try to force the image to render by creating a simple operator list
+                                      // This simulates how PDF.js would render just this one image
+                                      const tempOperatorList = {
+                                        fnArray: [PDFJS.OPS.beginText, PDFJS.OPS.setTextMatrix, PDFJS.OPS.paintImageXObject, PDFJS.OPS.endText],
+                                        argsArray: [
+                                          [], 
+                                          [1, 0, 0, 1, padding, padding], 
+                                          [ref], 
+                                          []
+                                        ]
+                                      };
+                                      
+                                      // Make internal references to this image available during rendering
+                                      const tempObjs = new Map();
+                                      tempObjs.set(ref, imageObj);
+                                      
+                                      // Try to render using PDF.js internal rendering
+                                      const renderContext = {
+                                        canvasContext: tempCtx,
+                                        viewport: { width: tempCanvas.width, height: tempCanvas.height, transform: [1,0,0,1,0,0] },
+                                        operatorList: tempOperatorList,
+                                        objs: tempObjs
+                                      };
+                                      
+                                      try {
+                                        // Try to use any available rendering method
+                                        if (typeof (page as any)._renderTask !== 'undefined' && typeof (page as any)._renderTask.capability !== 'undefined') {
+                                          // Try accessing internal render capability if available
+                                          await (page as any)._renderTask.capability.promise;
+                                        }
+                                        
+                                        // Extract just the image portion
+                                        ctx.drawImage(
+                                          tempCanvas, 
+                                          padding, padding, 
+                                          imageObj.width, imageObj.height,
+                                          0, 0, 
+                                          imageObj.width, imageObj.height
+                                        );
+                                      } catch (renderErr) {
+                                        console.warn(`Internal rendering failed: ${renderErr}`);
+                                      }
+                                    }
+                                  } catch (lastResortErr) {
+                                    console.warn(`All advanced methods failed: ${lastResortErr}`);
+                                    throw new Error('All bitmap access methods failed');
+                                  }
+                                }
+                              }
+                              
+                              // Save the extracted image
+                              const dataUrl = canvas.toDataURL('image/png');
+                              extractedImagesList.push({
+                                name: `img-${pageNum}-${imageRef.replace(/[^a-zA-Z0-9]/g, '')}-bitmap.png`,
+                                dataUrl
+                              });
+                              
+                              totalImages++;
+                              console.log(`Successfully extracted bitmap for ${imageRef} from page ${pageNum}`);
+                              extractionSuccess = true;
+                            }
+                          } catch (bitmapErr) {
+                            console.warn(`Error extracting bitmap for ${imageRef}:`, bitmapErr);
+                          }
+                        }
+                      } else {
+                        // More detailed reason why we couldn't extract the image
+                        if (!imageObj) {
+                          console.warn(`Image object ${imageRef} not found`);
+                        } else if (!imageObj.data) {
+                          console.warn(`Image object ${imageRef} has no data property`);
+                          
+                          // Try to render if we have width and height but no accessible data
+                          if (!extractionSuccess && imageObj.width && imageObj.height) {
+                            try {
+                              // Create a renderer for this specific image
+                              const renderCanvas = document.createElement('canvas');
+                              const renderCtx = renderCanvas.getContext('2d');
+                              
+                              if (renderCtx) {
+                                renderCanvas.width = imageObj.width;
+                                renderCanvas.height = imageObj.height;
+                                
+                                // Try to directly access the bitmap
+                                if (imageObj.bitmap) {
+                                  try {
+                                    // Some PDF.js implementations define bitmap as a getter that may throw
+                                    const bitmap = imageObj.bitmap;
+                                    renderCtx.drawImage(bitmap, 0, 0);
+                                    
+                                    // Save the image
+                                    const dataUrl = renderCanvas.toDataURL('image/png');
+                                    extractedImagesList.push({
+                                      name: `img-${pageNum}-${imageRef.replace(/[^a-zA-Z0-9]/g, '')}-special.png`,
+                                      dataUrl
+                                    });
+                                    
+                                    totalImages++;
+                                    console.log(`Successfully extracted special bitmap for ${imageRef}`);
+                                    extractionSuccess = true;
+                                  } catch (specialBitmapError) {
+                                    console.warn(`Special bitmap access failed: ${specialBitmapError}`);
+                                  }
+                                }
+                              }
+                            } catch (renderErr) {
+                              console.warn(`Special rendering failed for ${imageRef}: ${renderErr}`);
+                            }
+                          }
+                        } else if (!imageObj.width || !imageObj.height) {
+                          console.warn(`Image object ${imageRef} missing dimensions: width=${imageObj.width}, height=${imageObj.height}`);
+                        }
+                      }
+                    } catch (objErr) {
+                      console.warn(`Error accessing image object ${imageRef}:`, objErr);
+                    }
+                  }
+                }
+              } catch (pageErr) {
+                console.warn(`Error processing page ${pageNum}:`, pageErr);
+              }
+            }
+            
+            return totalImages;
+          };
           
-          // Update state with extracted images
+          // Start the extraction process
+          const extractedCount = await extractImagesFromPDF();
+          
+          // Update the state with extracted images
           setExtractedImages(extractedImagesList);
           
-          if (totalImages > 0) {
-            console.log(`Total images extracted from PDF: ${totalImages}`);
+          if (extractedCount > 0) {
+            console.log(`Successfully extracted ${extractedCount} images from PDF`);
           } else {
-            console.log(`No images extracted from the PDF document`);
+            console.log(`No images extracted, falling back to page rendering method`);
+            
+            // Extract each page as an image if it contains image operations (fallback method)
+            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+              try {
+                const page = await pdfDoc.getPage(pageNum);
+                const operatorList = await page.getOperatorList();
+                
+                // Check if this page has any images
+                let hasImages = false;
+                for (let i = 0; i < operatorList.fnArray.length; i++) {
+                  if (operatorList.fnArray[i] === PDFJS.OPS.paintImageXObject) {
+                    hasImages = true;
+                    break;
+                  }
+                }
+                
+                if (hasImages) {
+                  // Create a canvas for the entire page
+                  const canvas = document.createElement('canvas');
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) {
+                    // Get the viewport at a reasonable scale
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    
+                    // Set canvas dimensions
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    // Render the page to the canvas
+                    await page.render({
+                      canvasContext: ctx,
+                      viewport
+                    }).promise;
+                    
+                    // Convert to data URL and add to the list
+                    const dataUrl = canvas.toDataURL('image/png');
+                    extractedImagesList.push({
+                      name: `page-${pageNum}.png`,
+                      dataUrl
+                    });
+                    
+                    totalImages++;
+                    console.log(`Extracted page ${pageNum} with images (fallback method)`);
+                  }
+                }
+              } catch (pageError) {
+                console.warn(`Error processing page ${pageNum} for images:`, pageError);
+              }
+            }
+            
+            // Update state with extracted images from fallback method
+            setExtractedImages(extractedImagesList);
           }
         } catch (pdfError) {
           console.error(`Error processing PDF for images:`, pdfError);
