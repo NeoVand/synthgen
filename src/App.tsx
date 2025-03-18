@@ -257,7 +257,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Document text + file name
   const [rawText, setRawText] = useState<string>('')
-  const [fileName, setFileName] = useState<string>('')
+  const [fileName, setFileName] = useState<string | null>(null)
 
   // Summarization
   const [summaryPrompt, setSummaryPrompt] = useState<string>(
@@ -367,6 +367,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   // Add state for processImages near the top of the component with other state declarations
   const [processImages, setProcessImages] = useState<boolean>(false);
   const [originalFileData, setOriginalFileData] = useState<ArrayBuffer | null>(null);
+  // Store extracted images
+  const [extractedImages, setExtractedImages] = useState<Array<{name: string, dataUrl: string}>>([]);
 
   // Add resize handler
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -766,40 +768,69 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           // Initialize PDF.js 
           const pdfDoc = await getDocument({ data: originalFileData }).promise
           let totalImages = 0
+          const extractedImagesList: Array<{name: string, dataUrl: string}> = [];
           
           console.log(`Processing PDF with ${pdfDoc.numPages} pages for images`)
           
-          // Simpler approach - just detect the presence of image operations
+          // Extract each page as an image if it contains image operations
           for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
             try {
               const page = await pdfDoc.getPage(pageNum)
               const operatorList = await page.getOperatorList()
               
-              // Count image operations without trying to load them
-              let pageImageCount = 0
+              // Check if this page has any images
+              let hasImages = false;
               for (let i = 0; i < operatorList.fnArray.length; i++) {
                 if (operatorList.fnArray[i] === PDFJS.OPS.paintImageXObject) {
-                  pageImageCount++
+                  hasImages = true;
+                  break;
                 }
               }
               
-              if (pageImageCount > 0) {
-                totalImages += pageImageCount
-                console.log(`Detected ${pageImageCount} images on page ${pageNum}`)
+              if (hasImages) {
+                // Create a canvas for the entire page
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  // Get the viewport at a reasonable scale
+                  const viewport = page.getViewport({ scale: 1.5 });
+                  
+                  // Set canvas dimensions
+                  canvas.width = viewport.width;
+                  canvas.height = viewport.height;
+                  
+                  // Render the page to the canvas
+                  await page.render({
+                    canvasContext: ctx,
+                    viewport
+                  }).promise;
+                  
+                  // Convert to data URL and add to the list
+                  const dataUrl = canvas.toDataURL('image/png');
+                  extractedImagesList.push({
+                    name: `page-${pageNum}.png`,
+                    dataUrl
+                  });
+                  
+                  totalImages++;
+                  console.log(`Extracted page ${pageNum} with images`);
+                }
               }
             } catch (pageError) {
-              console.warn(`Error processing page ${pageNum} for images:`, pageError)
+              console.warn(`Error processing page ${pageNum} for images:`, pageError);
             }
           }
           
+          // Update state with extracted images
+          setExtractedImages(extractedImagesList);
+          
           if (totalImages > 0) {
-            console.log(`Total images detected in PDF: ${totalImages}`)
-            console.log(`To view the images, please use a PDF viewer application`)
+            console.log(`Total images extracted from PDF: ${totalImages}`);
           } else {
-            console.log(`No images detected in the PDF document`)
+            console.log(`No images extracted from the PDF document`);
           }
         } catch (pdfError) {
-          console.error(`Error processing PDF for images:`, pdfError)
+          console.error(`Error processing PDF for images:`, pdfError);
         }
       }
 
@@ -3849,6 +3880,88 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         qaPairs={qaPairs}
         ollamaSettings={ollamaSettings}
       />
+
+      {/* Extracted Images Display */}
+      {extractedImages.length > 0 && (
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            mt: 4, 
+            p: 3, 
+            borderRadius: '12px',
+            backgroundColor: theme.palette.background.paper
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Extracted Images ({extractedImages.length})
+            </Typography>
+            <Button 
+              onClick={() => setExtractedImages([])} 
+              color="error" 
+              size="small" 
+              startIcon={<DeleteIcon />}
+            >
+              Clear Images
+            </Button>
+          </Box>
+          
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            {extractedImages.map((img, index) => (
+              <Box 
+                key={index} 
+                sx={{ 
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  width: 200,
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                <img 
+                  src={img.dataUrl} 
+                  alt={img.name} 
+                  style={{ 
+                    width: '100%', 
+                    height: 'auto', 
+                    maxHeight: 200,
+                    objectFit: 'contain' 
+                  }} 
+                />
+                <Box sx={{ p: 1 }}>
+                  <Typography variant="caption" noWrap sx={{ display: 'block' }}>
+                    {img.name}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                    <Button 
+                      size="small" 
+                      variant="outlined" 
+                      fullWidth
+                      onClick={() => {
+                        // Create a temporary link and trigger download
+                        const link = document.createElement('a');
+                        link.href = img.dataUrl;
+                        link.download = img.name;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                    >
+                      Download
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Paper>
+      )}
+
+      {/* Main Content Sections */}
+      <Box sx={{ mt: 4 }}>
+        {/* Add your existing content here */}
+      </Box>
     </Box>
   );
 };
