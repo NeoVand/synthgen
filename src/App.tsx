@@ -177,7 +177,6 @@ const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
 import { replacePlaceholders } from './config/promptTemplates';
 
 // Add this import with the other icon imports
-import ImageIcon from '@mui/icons-material/Image'
 
 const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const theme = useTheme();
@@ -932,27 +931,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                                       
                                       // Try to force the image to render by creating a simple operator list
                                       // This simulates how PDF.js would render just this one image
-                                      const tempOperatorList = {
-                                        fnArray: [PDFJS.OPS.beginText, PDFJS.OPS.setTextMatrix, PDFJS.OPS.paintImageXObject, PDFJS.OPS.endText],
-                                        argsArray: [
-                                          [], 
-                                          [1, 0, 0, 1, padding, padding], 
-                                          [ref], 
-                                          []
-                                        ]
-                                      };
                                       
                                       // Make internal references to this image available during rendering
                                       const tempObjs = new Map();
                                       tempObjs.set(ref, imageObj);
                                       
                                       // Try to render using PDF.js internal rendering
-                                      const renderContext = {
-                                        canvasContext: tempCtx,
-                                        viewport: { width: tempCanvas.width, height: tempCanvas.height, transform: [1,0,0,1,0,0] },
-                                        operatorList: tempOperatorList,
-                                        objs: tempObjs
-                                      };
                                       
                                       try {
                                         // Try to use any available rendering method
