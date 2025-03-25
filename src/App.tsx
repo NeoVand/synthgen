@@ -176,9 +176,6 @@ const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
 // Import the replacePlaceholders helper
 import { replacePlaceholders } from './config/promptTemplates';
 
-// Add this import with the other icon imports
-import ImageIcon from '@mui/icons-material/Image'
-
 const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const theme = useTheme();
   
@@ -758,51 +755,238 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     }
 
     try {
-      let chunks: string[] = [];
+      // Helper functions for JSONL processing
+      const getNestedValue = (obj: any, path: string): any => {
+        const parts = path.split('.');
+        let current = obj;
+        
+        for (const part of parts) {
+          if (current === null || current === undefined || typeof current !== 'object') {
+            return undefined;
+          }
+          current = current[part];
+        }
+        
+        return current;
+      };
+      
+      // Helper function to format values based on their type
+      const formatValue = (value: any): string => {
+        if (value === undefined || value === null) {
+          return '';
+        } else if (Array.isArray(value)) {
+          // For arrays, join items as comma-separated list
+          return value.join(', ');
+        } else if (typeof value === 'object') {
+          // For objects, convert to string representation
+          return JSON.stringify(value);
+        } else {
+          // For primitive values, convert to string
+          return String(value);
+        }
+      };
 
+      // Create a variable to store page image data
+      let pageImageDataList: { pageNum: number; dataUrl: string }[] = [];
+      
       // If it's a PDF and processImages is enabled, extract images first
       if (fileName?.toLowerCase().endsWith('.pdf') && processImages && originalFileData) {
         try {
           // Initialize PDF.js 
           const pdfDoc = await getDocument({ data: originalFileData }).promise
           let totalImages = 0
+          let totalVectorGraphics = 0
+          let totalFormXObjects = 0
+          let pageImageDetails: {page: number, count: number, sizes: string[]}[] = []
+          
+          // Track pages with visual elements to render later
+          const pagesWithVisuals: number[] = []
           
           console.log(`Processing PDF with ${pdfDoc.numPages} pages for images`)
           
-          // Simpler approach - just detect the presence of image operations
+          // Enhanced approach to detect more types of images and graphics
           for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
             try {
               const page = await pdfDoc.getPage(pageNum)
               const operatorList = await page.getOperatorList()
+              const commonObjs = page.commonObjs
               
-              // Count image operations without trying to load them
+              // Count various types of visual elements
               let pageImageCount = 0
+              let pageSvgCount = 0
+              let pageFormXObjectCount = 0
+              const imageSizes: string[] = []
+              
+              // Track XObject names to avoid double counting
+              const processedXObjects = new Set<string>()
+              
               for (let i = 0; i < operatorList.fnArray.length; i++) {
-                if (operatorList.fnArray[i] === PDFJS.OPS.paintImageXObject) {
+                const op = operatorList.fnArray[i]
+                const args = operatorList.argsArray[i]
+                
+                // Direct image operations
+                if (op === PDFJS.OPS.paintImageXObject) {
+                  const imageRef = args[0]
+                  
+                  // Skip if we've already processed this XObject
+                  if (processedXObjects.has(imageRef)) {
+                    continue
+                  }
+                  
+                  processedXObjects.add(imageRef)
                   pageImageCount++
+                  
+                  // Try to get image size if available
+                  try {
+                    const img = commonObjs.get(imageRef)
+                    if (img && img.width && img.height) {
+                      imageSizes.push(`${img.width}x${img.height}`)
+                    }
+                  } catch (e) {
+                    // Ignore errors when trying to get image details
+                  }
+                } 
+                // Form XObjects might contain embedded images
+                else if (op === PDFJS.OPS.paintFormXObjectBegin) {
+                  pageFormXObjectCount++
+                  totalFormXObjects++
+                }
+                // Check for vector graphics operations
+                else if ([
+                  PDFJS.OPS.constructPath,
+                  PDFJS.OPS.stroke,
+                  PDFJS.OPS.fill,
+                  PDFJS.OPS.shadingFill,
+                  PDFJS.OPS.eoFill
+                ].includes(op)) {
+                  pageSvgCount++
+                }
+                // Check for masked images
+                else if (op === PDFJS.OPS.setGState) {
+                  try {
+                    const gStateId = args[0]
+                    const gState = commonObjs.get(gStateId)
+                    
+                    // Check if this graphics state has a soft mask (transparent image)
+                    if (gState && gState.smask) {
+                      pageImageCount++
+                    }
+                  } catch (e) {
+                    // Ignore errors when trying to get graphics state details
+                  }
                 }
               }
               
-              if (pageImageCount > 0) {
+              if (pageImageCount > 0 || pageSvgCount > 0 || pageFormXObjectCount > 0) {
                 totalImages += pageImageCount
-                console.log(`Detected ${pageImageCount} images on page ${pageNum}`)
+                totalVectorGraphics += pageSvgCount
+                
+                // Add this page to the list of pages with visual elements
+                pagesWithVisuals.push(pageNum)
+                
+                // Record details for this page
+                pageImageDetails.push({
+                  page: pageNum,
+                  count: pageImageCount,
+                  sizes: imageSizes
+                })
+                
+                console.log(`Page ${pageNum}: ${pageImageCount} images, ${pageSvgCount} vector graphics elements, ${pageFormXObjectCount} form XObjects`)
+                if (imageSizes.length > 0) {
+                  console.log(`  Image sizes: ${imageSizes.join(', ')}`)
+                }
               }
+              
+              // Check for annotations that might contain images
+              const annotations = await page.getAnnotations()
+              for (const annotation of annotations) {
+                if (annotation.subtype === 'Widget' || annotation.subtype === 'Stamp') {
+                  console.log(`Page ${pageNum}: Contains ${annotation.subtype} annotation that may include images`)
+                  if (!pagesWithVisuals.includes(pageNum)) {
+                    pagesWithVisuals.push(pageNum)
+                  }
+                }
+              }
+              
             } catch (pageError) {
               console.warn(`Error processing page ${pageNum} for images:`, pageError)
             }
           }
           
-          if (totalImages > 0) {
-            console.log(`Total images detected in PDF: ${totalImages}`)
-            console.log(`To view the images, please use a PDF viewer application`)
+          // Render pages with visual elements to canvas and convert to data URLs
+          if (pagesWithVisuals.length > 0) {
+            console.log(`Rendering ${pagesWithVisuals.length} pages containing visual elements`)
+            
+            for (const pageNum of pagesWithVisuals) {
+              try {
+                const page = await pdfDoc.getPage(pageNum)
+                
+                // Create a new canvas for this page
+                const canvas = document.createElement('canvas')
+                const ctx = canvas.getContext('2d')
+                
+                if (!ctx) {
+                  console.error(`Failed to get canvas context for page ${pageNum}`)
+                  continue
+                }
+                
+                // Set scale and viewport - adjust scale as needed for quality vs file size
+                const scale = 1.5 // Higher value for better quality
+                const viewport = page.getViewport({ scale })
+                
+                // Set canvas dimensions to match the page
+                canvas.width = viewport.width
+                canvas.height = viewport.height
+                
+                // Render the page to canvas
+                const renderContext = {
+                  canvasContext: ctx,
+                  viewport: viewport
+                }
+                
+                await page.render(renderContext).promise
+                
+                // Convert canvas to data URL (image)
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.85) // Adjust quality as needed
+                
+                // Store the rendered page image
+                pageImageDataList.push({ pageNum, dataUrl })
+                
+                console.log(`Rendered page ${pageNum} as image (${Math.round(dataUrl.length / 1024)} KB)`)
+              } catch (renderError) {
+                console.error(`Error rendering page ${pageNum}:`, renderError)
+              }
+            }
+          }
+          
+          if (totalImages > 0 || totalVectorGraphics > 0 || totalFormXObjects > 0) {
+            console.log(`PDF Summary:`)
+            console.log(`- ${totalImages} raster images detected`)
+            console.log(`- ${totalVectorGraphics} vector graphic elements detected`)
+            console.log(`- ${totalFormXObjects} form XObjects detected (may contain additional images)`)
+            console.log(`- ${pageImageDataList.length} pages rendered as images`)
+            
+            // Detailed report for pages with images
+            if (pageImageDetails.length > 0) {
+              console.log(`Detailed image report:`)
+              pageImageDetails.forEach(detail => {
+                console.log(`Page ${detail.page}: ${detail.count} images`)
+                if (detail.sizes.length > 0) {
+                  console.log(`  Sizes: ${detail.sizes.join(', ')}`)
+                }
+              })
+            }
           } else {
-            console.log(`No images detected in the PDF document`)
+            console.log(`No images or graphics detected in the PDF document`)
           }
         } catch (pdfError) {
           console.error(`Error processing PDF for images:`, pdfError)
         }
       }
-
+      
+      // Process text chunks (regardless of whether we processed images)
+      let chunks: string[] = [];
+      
       switch (chunkingAlgorithm) {
         case 'recursive':
           const splitter = new RecursiveCharacterTextSplitter({
@@ -836,149 +1020,50 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           const windowNodes = windowSplitter.getNodesFromDocuments([new Document({ text: rawText })]);
           chunks = windowNodes.map(node => node.text);
           break;
-
+          
         case 'csv-tsv':
-          try {
-            if (csvData.length < 2) {
-              throw new Error('CSV/TSV must have at least a header row and one data row');
-            }
-
-            // Get selected columns and their indices
-            const selectedColumns = csvColumns
-              .map((col, index) => ({ name: col.name, index, selected: col.selected }))
-              .filter(col => col.selected);
-
-            if (selectedColumns.length === 0) {
-              throw new Error('Please select at least one column to include');
-            }
-
-            // Process each data row into a formatted string
-            chunks = csvData.slice(1).map(row => {
-              return selectedColumns
-                .map(col => {
-                  const value = row[col.index];
-                  // Only include non-empty values
-                  return value ? `${col.name}: ${value}` : null;
-                })
-                .filter(Boolean) // Remove null entries
-                .join('\n');
-            })
-            .filter(chunk => chunk.trim().length > 0); // Remove empty chunks
-          } catch (err) {
-            console.error('Error parsing CSV/TSV:', err);
-            alert('Failed to parse CSV/TSV. Please check the file format.');
-            return;
-          }
+          chunks = csvData.slice(1).map(row => {
+            return csvColumns
+              .filter(col => col.selected)
+              .map(col => {
+                const colIndex = csvData[0].indexOf(col.name);
+                return colIndex >= 0 ? row[colIndex] : '';
+              })
+              .join(' ');
+          }).filter(text => text.trim());
           break;
           
         case 'jsonl':
-          try {
-            if (jsonlData.length === 0) {
-              throw new Error('No valid JSON objects found in the file');
-            }
-
-            // Get selected keys
-            const selectedKeys = jsonlKeys
+          chunks = jsonlData.map(obj => {
+            return jsonlKeys
               .filter(key => key.selected)
-              .map(key => key.path);
-
-            if (selectedKeys.length === 0) {
-              throw new Error('Please select at least one key to include');
-            }
-
-            // Helper function to get nested value from an object using a path
-            const getNestedValue = (obj: any, path: string): any => {
-              const parts = path.split('.');
-              let current = obj;
-              
-              for (const part of parts) {
-                if (current === null || current === undefined || typeof current !== 'object') {
-                  return undefined;
-                }
-                current = current[part];
-              }
-              
-              return current;
-            };
-
-            // Helper function to format values based on their type
-            const formatValue = (value: any): string => {
-              if (value === undefined || value === null) {
-                return '';
-              } else if (Array.isArray(value)) {
-                // For arrays, format each item with 1-based indices
-                if (value.length === 0) return '[]';
-                
-                // If array contains objects, format them nicely
-                if (typeof value[0] === 'object' && value[0] !== null) {
-                  return value.map((item, index) => {
-                    if (typeof item === 'object' && item !== null) {
-                      return `${index + 1}. ${JSON.stringify(item, null, 2).replace(/\n/g, '\n   ')}`;
-                    }
-                    return `${index + 1}. ${String(item)}`;
-                  }).join('\n');
-                }
-                
-                // For simple arrays, join with newlines and 1-based indices
-                return value.map((item, index) => `${index + 1}. ${String(item)}`).join('\n');
-              } else if (typeof value === 'object') {
-                // For objects, pretty print with indentation
-                return `\n${JSON.stringify(value, null, 2)}`;
-              } else {
-                // For primitive values, convert to string
-                return String(value);
-              }
-            };
-
-            // Process each JSON object into a formatted string
-            chunks = jsonlData.map(obj => {
-              const formattedChunks: string[] = [];
-              
-              // Process each selected key
-              selectedKeys.forEach(path => {
-                const value = getNestedValue(obj, path);
-                const parts = path.split('.');
-                const name = parts[parts.length - 1];
-                
-                // Skip undefined or null values
-                if (value === undefined || value === null) {
-                  return;
-                }
-                
-                // For arrays, create a separate entry for each item
-                if (Array.isArray(value)) {
-                  // Format each array item with 1-based indices
-                  const formattedItems = value.map((item, index) => {
-                    if (typeof item === 'object' && item !== null) {
-                      return `${name}: ${index + 1}. ${JSON.stringify(item, null, 2).replace(/\n/g, '\n   ')}`;
-                    }
-                    return `${name}: ${index + 1}. ${String(item)}`;
-                  });
-                  
-                  // Add all formatted items to the chunks
-                  formattedChunks.push(...formattedItems);
-                } else {
-                  // For non-arrays, add a single entry
-                  formattedChunks.push(`${name}: ${formatValue(value)}`);
-                }
-              });
-              
-              return formattedChunks.join('\n');
-            })
-            .filter(chunk => chunk.trim().length > 0); // Remove empty chunks
-          } catch (err) {
-            console.error('Error processing JSONL:', err);
-            alert('Failed to process JSONL. Please check the file format.');
-            return;
-          }
+              .map(key => {
+                const value = getNestedValue(obj, key.path);
+                return formatValue(value);
+              })
+              .join(' ');
+          }).filter(text => text.trim());
           break;
       }
-
-      // If there are existing Q&A pairs, show the confirmation dialog
-      if (qaPairs.length > 0) {
-        setPendingChunks(chunks);
-        setShowChunkingDialog(true);
-        return;
+      
+      // If we have rendered page images from PDF processing, add them to the chunks
+      if (fileName?.toLowerCase().endsWith('.pdf') && processImages && pageImageDataList.length > 0) {
+        const imageChunks: string[] = [];
+        
+        // Sort page images by page number
+        pageImageDataList.sort((a, b) => a.pageNum - b.pageNum);
+        
+        // Add each page image as a separate chunk at the beginning
+        pageImageDataList.forEach(({ pageNum, dataUrl }) => {
+          const imageChunk = `<div class="pdf-page-image">
+            <p> Potential Image(s) Found on Page  ${pageNum}</p>
+            <img src="${dataUrl}" alt="PDF Page ${pageNum}" style="max-width: 100%; height: auto;" />
+          </div>`;
+          imageChunks.push(imageChunk);
+        });
+        
+        // Prepend image chunks to the text chunks
+        chunks = [...imageChunks, ...chunks];
       }
 
       // If no existing Q&A pairs, proceed with creating new pairs
@@ -994,6 +1079,22 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         }
       }))
       setQaPairs(pairs)
+      
+      // Auto-expand cells with images
+      const newExpandedCells: Record<string, boolean> = { ...expandedCells };
+      pairs.forEach((pair) => {
+        if (pair.context.includes('<div class="pdf-page-image">')) {
+          newExpandedCells[`${pair.id}-context`] = true;
+        }
+      });
+      setExpandedCells(newExpandedCells);
+      
+      // If there are existing Q&A pairs, show the confirmation dialog
+      if (qaPairs.length > 0) {
+        setPendingChunks(chunks);
+        setShowChunkingDialog(true);
+        return;
+      }
     } catch (err) {
       console.error('Error chunking doc:', err)
       alert('Failed to chunk document.')
@@ -2537,7 +2638,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                                     </Typography>
                                   }
                                 />
-                                <Tooltip title="Extract and process images from the document." placement="right">
+                                <Tooltip title="Extract images from your document. The tool will identify and process as many images as possible, though some might be missed. Pages containing images will be fully extracted, allowing you to select specific regions to keep. You may need to remove some extra content after extraction." placement="right">
                                   <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
                                     <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
                                   </IconButton>
@@ -3817,6 +3918,16 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
             }
           }));
           setQaPairs(newPairs);
+          
+          // Auto-expand cells with images
+          const newExpandedCells: Record<string, boolean> = {};
+          newPairs.forEach((pair) => {
+            if (pair.context.includes('<div class="pdf-page-image">')) {
+              newExpandedCells[`${pair.id}-context`] = true;
+            }
+          });
+          setExpandedCells(newExpandedCells);
+          
           setShowChunkingDialog(false);
           setPendingChunks([]);
         }}
@@ -3835,6 +3946,16 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
             }
           }));
           setQaPairs(prev => [...prev, ...newPairs]);
+          
+          // Auto-expand cells with images
+          const newExpandedCells: Record<string, boolean> = { ...expandedCells };
+          newPairs.forEach((pair) => {
+            if (pair.context.includes('<div class="pdf-page-image">')) {
+              newExpandedCells[`${pair.id}-context`] = true;
+            }
+          });
+          setExpandedCells(newExpandedCells);
+          
           setShowChunkingDialog(false);
           setPendingChunks([]);
         }}

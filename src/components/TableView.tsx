@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -20,6 +20,9 @@ import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 
 // Import the types from the types folder
 import { QAPair, GenerationType, GenerationProgress } from '../types';
+
+// Import the ImageViewerDialog
+import ImageViewerDialog from './dialogs/ImageViewerDialog';
 
 interface TableViewProps {
   qaPairs: QAPair[];
@@ -57,6 +60,14 @@ const TableView: React.FC<TableViewProps> = ({
   isCellGenerating
 }) => {
   const theme = useTheme();
+  
+  // Add state for image viewer
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [viewerImageUrl, setViewerImageUrl] = useState('');
+  const [viewerPageNumber, setViewerPageNumber] = useState(0);
+  
+  // Track image elements with refs
+  const imageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const handlePageChange = (_: unknown, newPage: number) => {
     onPageChange(newPage);
@@ -80,6 +91,65 @@ const TableView: React.FC<TableViewProps> = ({
     );
     onQAPairChange(updatedQAPairs);
   };
+
+  // Add function to handle image click
+  const handleImageClick = (e: React.MouseEvent, dataUrl: string, pageNumber: number) => {
+    e.stopPropagation(); // Prevent cell expansion toggle
+    setViewerImageUrl(dataUrl);
+    setViewerPageNumber(pageNumber);
+    setImageViewerOpen(true);
+  };
+  
+  // Helper to extract image URL and page number from HTML content
+  const extractImageInfo = (htmlContent: string): { url: string; pageNumber: number } | null => {
+    // Simple regex to extract image source and page number
+    const imgSrcMatch = htmlContent.match(/src="([^"]+)"/);
+    const pageNumberMatch = htmlContent.match(/PDF Page (\d+)/);
+    
+    if (imgSrcMatch && pageNumberMatch) {
+      return {
+        url: imgSrcMatch[1],
+        pageNumber: parseInt(pageNumberMatch[1], 10)
+      };
+    }
+    
+    return null;
+  };
+  
+  // Use effect to add click handlers to images
+  useEffect(() => {
+    // Store cleanup functions
+    const cleanupFunctions: (() => void)[] = [];
+    
+    // Process each image container
+    imageRefs.current.forEach((containerElement, key) => {
+      const [rowId, imageUrl, pageNumber] = key.split('||');
+      const imgElement = containerElement.querySelector('img') as HTMLImageElement;
+      
+      if (imgElement) {
+        // Define the click handler
+        const clickHandler = (e: MouseEvent) => {
+          e.stopPropagation();
+          setViewerImageUrl(imageUrl);
+          setViewerPageNumber(parseInt(pageNumber, 10));
+          setImageViewerOpen(true);
+        };
+        
+        // Add the event listener
+        imgElement.addEventListener('click', clickHandler);
+        
+        // Add cleanup function to array
+        cleanupFunctions.push(() => {
+          imgElement.removeEventListener('click', clickHandler);
+        });
+      }
+    });
+    
+    // Return a single cleanup function that calls all the individual cleanup functions
+    return () => {
+      cleanupFunctions.forEach(cleanup => cleanup());
+    };
+  }, [page, rowsPerPage, qaPairs]); // Re-run when visible rows change
 
   return (
     <TableContainer sx={{ 
@@ -275,8 +345,15 @@ const TableView: React.FC<TableViewProps> = ({
                   </TableCell>
                   {['context', 'question', 'answer'].map((columnType) => {
                     const isGeneratingCell = isCellGenerating(qa, columnType);
-                    const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGeneratingCell;
                     const content = qa[columnType as keyof typeof qa] as string;
+                    const isHtmlContent = columnType === 'context' && content.includes('<div class="pdf-page-image">');
+                    const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGeneratingCell || isHtmlContent;
+                    
+                    // Extract image info if this is an HTML content cell
+                    const imageInfo = isHtmlContent ? extractImageInfo(content) : null;
+                    
+                    // Create a unique key for this image container if needed
+                    const imageRefKey = imageInfo ? `${qa.id}||${imageInfo.url}||${imageInfo.pageNumber}` : '';
                     
                     return (
                       <TableCell 
@@ -331,37 +408,88 @@ const TableView: React.FC<TableViewProps> = ({
                           },
                           overflowY: 'scroll'
                         }}>
-                          <TextField
-                            multiline
-                            fullWidth
-                            variant="standard"
-                            value={content}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleCellChange(qa.id, columnType, e.target.value);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            InputProps={{
-                              disableUnderline: true,
-                              sx: {
-                                alignItems: 'flex-start',
-                                padding: 0,
+                          {isHtmlContent ? (
+                            <Box 
+                              sx={{ 
+                                width: '100%', 
                                 fontSize: '0.875rem',
                                 lineHeight: 1.5,
                                 minHeight: isExpanded ? 'auto' : '4.5em',
-                                backgroundColor: 'transparent',
-                                '& textarea': {
-                                  padding: 0,
+                                '& img': {
+                                  maxWidth: '100%',
+                                  height: 'auto',
+                                  borderRadius: '4px',
+                                  boxShadow: theme.palette.mode === 'dark' 
+                                    ? '0 2px 8px rgba(0,0,0,0.5)' 
+                                    : '0 2px 8px rgba(0,0,0,0.15)',
+                                  cursor: 'zoom-in', // Add pointer cursor for images
+                                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                                  '&:hover': {
+                                    transform: 'scale(1.02)',
+                                    boxShadow: theme.palette.mode === 'dark' 
+                                      ? '0 4px 12px rgba(0,0,0,0.7)' 
+                                      : '0 4px 12px rgba(0,0,0,0.25)',
+                                  }
+                                },
+                                '& p': {
+                                  margin: '8px 0',
+                                  fontWeight: 500,
                                 }
-                              }
-                            }}
-                            sx={{
-                              width: '100%',
-                              '& .MuiInputBase-root': {
-                                padding: 0,
-                              },
-                            }}
-                          />
+                              }}
+                              dangerouslySetInnerHTML={{ __html: content }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // If user clicks directly on the image container and we have image info,
+                                // open the image viewer directly (enhances accessibility)
+                                if (imageInfo) {
+                                  setViewerImageUrl(imageInfo.url);
+                                  setViewerPageNumber(imageInfo.pageNumber);
+                                  setImageViewerOpen(true);
+                                }
+                              }}
+                              ref={(node: HTMLDivElement | null) => {
+                                // Store reference to the container element
+                                if (node && imageInfo) {
+                                  imageRefs.current.set(imageRefKey, node);
+                                } else if (!node && imageInfo) {
+                                  // Cleanup when unmounting
+                                  imageRefs.current.delete(imageRefKey);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <TextField
+                              multiline
+                              fullWidth
+                              variant="standard"
+                              value={content}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleCellChange(qa.id, columnType, e.target.value);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              InputProps={{
+                                disableUnderline: true,
+                                sx: {
+                                  alignItems: 'flex-start',
+                                  padding: 0,
+                                  fontSize: '0.875rem',
+                                  lineHeight: 1.5,
+                                  minHeight: isExpanded ? 'auto' : '4.5em',
+                                  backgroundColor: 'transparent',
+                                  '& textarea': {
+                                    padding: 0,
+                                  }
+                                }
+                              }}
+                              sx={{
+                                width: '100%',
+                                '& .MuiInputBase-root': {
+                                  padding: 0,
+                                },
+                              }}
+                            />
+                          )}
                         </Box>
                       </TableCell>
                     );
@@ -397,6 +525,14 @@ const TableView: React.FC<TableViewProps> = ({
             : alpha(theme.palette.background.paper, 0.6),
           backdropFilter: 'blur(8px)',
         }}
+      />
+      
+      {/* Add the ImageViewerDialog */}
+      <ImageViewerDialog
+        open={imageViewerOpen}
+        onClose={() => setImageViewerOpen(false)}
+        imageUrl={viewerImageUrl}
+        pageNumber={viewerPageNumber}
       />
     </TableContainer>
   );
