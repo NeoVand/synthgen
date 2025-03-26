@@ -70,39 +70,12 @@ import ExportOptionsDialog, { ExportOptions } from './components/dialogs/ExportO
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
-interface QAPair {
-  id: number
-  context: string
-  question: string
-  answer: string
-  selected?: boolean
-  generating?: {
-    question: boolean
-    answer: boolean
-  }
-}
-
-interface OllamaSettingsType {
-  model: string
-  temperature: number
-  topP: number
-  useFixedSeed: boolean
-  seed: number
-  numCtx: number
-}
+// Import QAPair and other types from types/index.ts instead of defining them here
+import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, Edge as EdgeType } from './types';
 
 interface AppProps {
   onThemeChange: () => void;
 }
-
-interface Section {
-  id: string;
-  title: string;
-  icon?: React.ReactNode;
-  description: string;
-}
-
-type SectionEntry = { sectionId: string; element: HTMLElement };
 
 type ListContextValue = {
   getListLength: () => number;
@@ -148,12 +121,6 @@ function getSectionRegistry() {
 // Add type for chunking algorithms
 type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv' | 'jsonl' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 
-// Add these new types and constants
-interface OllamaError {
-  message: string;
-  isOllamaError: boolean;
-}
-
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434';
 
 // Add a helper function to check Ollama connection
@@ -165,9 +132,6 @@ const checkOllamaConnection = async (): Promise<boolean> => {
     return false;
   }
 };
-
-// Add this with other type definitions at the top of the file
-type ViewMode = 'table' | 'flashcard';
 
 // Update the isTableView and isFlashcardView functions
 const isTableView = (mode: ViewMode): boolean => mode === 'table';
@@ -1109,7 +1073,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Add a debounced update function using useCallback
   const debouncedUpdateQaPairs = useCallback(
-    debounce((id: number, updates: Partial<QAPair>) => {
+    debounce((id: string | number, updates: Partial<QAPair>) => {
       setQaPairs(prev =>
         prev.map(qa =>
           qa.id === id ? { ...qa, ...updates } : qa
@@ -1639,7 +1603,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
       // If we're appending, get the highest existing ID
       const startId = mode === 'append' 
-        ? Math.max(...qaPairs.map(qa => qa.id)) + 1 
+        ? Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1 
         : 1;
 
       // Convert rows to QAPairs
@@ -1752,7 +1716,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   };
 
   // Helper to toggle cell expansion
-  const toggleCellExpansion = useCallback((rowId: number, columnType: string) => {
+  const toggleCellExpansion = useCallback((rowId: string | number, columnType: string) => {
     setExpandedCells(prev => {
       const newState = { ...prev };
       // Check if any cell in this row is expanded
@@ -1986,7 +1950,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     setQaPairs(prev => prev.map(qa => qa.id === updatedQA.id ? updatedQA : qa));
   };
 
-  const handleSingleCardGenerate = async (cardId: number) => {
+  const handleSingleCardGenerate = async (cardId: string | number) => {
     if (isGenerating) {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
@@ -2109,7 +2073,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Add this new function to handle creating empty rows/cards
   const handleAddEmpty = () => {
-    const newId = qaPairs.length > 0 ? Math.max(...qaPairs.map(qa => qa.id)) + 1 : 1;
+    const newId = qaPairs.length > 0 
+      ? Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1 
+      : 1;
     const newQA: QAPair = {
       id: newId,
       context: '',
@@ -2168,7 +2134,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       const currentQA = qaPairs[currentIndex];
       if (!currentQA) return;
 
-      const newId = Math.max(...qaPairs.map(qa => qa.id)) + 1;
+      const newId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1;
       const duplicatedQA: QAPair = {
         ...currentQA,
         id: newId,
@@ -2185,7 +2151,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       const selectedQAs = qaPairs.filter(qa => qa.selected);
       if (selectedQAs.length === 0) return;
 
-      let nextId = Math.max(...qaPairs.map(qa => qa.id)) + 1;
+      let nextId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1;
       const newQAPairs = [...qaPairs];
 
       // Sort selected QAs by their position in descending order
@@ -2214,7 +2180,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   };
 
   // Add new handlers for single card generation
-  const handleSingleCardGenerateQuestion = async (cardId: number) => {
+  const handleSingleCardGenerateQuestion = async (cardId: string | number) => {
     if (isGenerating) {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
@@ -2256,7 +2222,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     }
   };
 
-  const handleSingleCardGenerateAnswer = async (cardId: number) => {
+  const handleSingleCardGenerateAnswer = async (cardId: string | number) => {
     if (isGenerating) {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
@@ -3935,7 +3901,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         }}
         onAppend={(chunks: string[]) => {
           // Append new chunks to existing ones
-          const lastId = Math.max(...qaPairs.map(qa => qa.id));
+          const lastId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id)));
           const newPairs = chunks.map((chunk, idx) => ({
             id: lastId + idx + 1,
             context: chunk,

@@ -35,6 +35,7 @@ import { ExpandLess, ExpandMore } from '@mui/icons-material';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import TuneIcon from '@mui/icons-material/Tune';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { QAPair } from '../../types';
 
 export interface ColumnConfig {
   field: string;
@@ -48,7 +49,7 @@ export interface ExportOptions {
   columns: ColumnConfig[];
   batchSize?: number;
   shuffle?: boolean;
-  data?: Array<{id: number, question: string, answer: string, context: string}>;
+  data?: QAPair[];
 }
 
 interface ExportOptionsDialogProps {
@@ -56,7 +57,7 @@ interface ExportOptionsDialogProps {
   onClose: () => void;
   onExport: (options: ExportOptions) => void;
   onShuffle?: () => void;
-  qaPairs: Array<{id: number, question: string, answer: string, context: string}>;
+  qaPairs: QAPair[];
   ollamaSettings?: {
     model: string;
     temperature: number;

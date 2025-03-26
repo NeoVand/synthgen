@@ -9,24 +9,16 @@ import {
 import ExtensionIcon from '@mui/icons-material/Extension';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import { QAPair } from '../types';
 
-interface QAPair {
-  id: number;
-  context: string;
-  question: string;
-  answer: string;
-  selected?: boolean;
-  generating?: {
-    question: boolean;
-    answer: boolean;
-  };
-}
+// Define ChunkingAlgorithm locally if it's not exported
+type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv' | 'jsonl' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 
 interface FlashcardViewProps {
   qaPairs: QAPair[];
   onUpdateQA: (updatedQA: QAPair) => void;
   currentIndex: number;
-  chunkingAlgorithm: 'recursive' | 'line' | 'csv-tsv' | 'jsonl' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
+  chunkingAlgorithm: ChunkingAlgorithm;
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({

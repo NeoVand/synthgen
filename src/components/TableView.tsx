@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -23,6 +23,7 @@ import { QAPair, GenerationType, GenerationProgress } from '../types';
 
 // Import the ImageViewerDialog
 import ImageViewerDialog from './dialogs/ImageViewerDialog';
+import { Region } from './ImageRegionSelector';
 
 interface TableViewProps {
   qaPairs: QAPair[];
@@ -37,9 +38,9 @@ interface TableViewProps {
   // Callbacks
   onPageChange: (newPage: number) => void;
   onRowsPerPageChange: (newRowsPerPage: number) => void;
-  onToggleCellExpansion: (rowId: number, columnType: string) => void;
+  onToggleCellExpansion: (rowId: string | number, columnType: string) => void;
   onQAPairChange: (updatedQAPairs: QAPair[]) => void;
-  onSelectRow: (rowId: number, selected: boolean) => void;
+  onSelectRow: (rowId: string | number, selected: boolean) => void;
   onSelectAllRows: (selected: boolean) => void;
   isCellGenerating: (qa: QAPair, columnType: string) => boolean;
 }
@@ -81,11 +82,11 @@ const TableView: React.FC<TableViewProps> = ({
     onSelectAllRows(event.target.checked);
   };
 
-  const handleSelectRow = (id: number, checked: boolean) => {
+  const handleSelectRow = (id: string | number, checked: boolean) => {
     onSelectRow(id, checked);
   };
 
-  const handleCellChange = (id: number, field: string, value: string) => {
+  const handleCellChange = (id: string | number, field: string, value: string) => {
     const updatedQAPairs = qaPairs.map(qa => 
       qa.id === id ? { ...qa, [field]: value } : qa
     );
@@ -102,9 +103,11 @@ const TableView: React.FC<TableViewProps> = ({
   
   // Helper to extract image URL and page number from HTML content
   const extractImageInfo = (htmlContent: string): { url: string; pageNumber: number } | null => {
-    // Simple regex to extract image source and page number
+    // Simple regex to extract image source
     const imgSrcMatch = htmlContent.match(/src="([^"]+)"/);
-    const pageNumberMatch = htmlContent.match(/PDF Page (\d+)/);
+    
+    // Try to match both formats: "PDF Page X" and "Page X Region"
+    const pageNumberMatch = htmlContent.match(/(?:PDF Page|Page) (\d+)/);
     
     if (imgSrcMatch && pageNumberMatch) {
       return {
@@ -116,40 +119,134 @@ const TableView: React.FC<TableViewProps> = ({
     return null;
   };
   
-  // Use effect to add click handlers to images
-  useEffect(() => {
+  // Add this helper function to attach click handlers to all images in a container
+  const attachImageClickHandlers = useCallback((container: HTMLElement, rowId: string | number, columnType: string) => {
+    // Find all images in the container
+    const images = container.querySelectorAll('img');
+    
     // Store cleanup functions
     const cleanupFunctions: (() => void)[] = [];
     
-    // Process each image container
-    imageRefs.current.forEach((containerElement, key) => {
-      const [rowId, imageUrl, pageNumber] = key.split('||');
-      const imgElement = containerElement.querySelector('img') as HTMLImageElement;
+    // Attach click handler to each image
+    images.forEach(img => {
+      const clickHandler = (e: MouseEvent) => {
+        e.stopPropagation();
+        
+        // Get the image URL
+        const imageUrl = (img as HTMLImageElement).src;
+        
+        // Try to extract page number from parent elements
+        let pageNumber = 1;
+        const pageNumberElement = img.closest('.pdf-page-image')?.querySelector('.page-number');
+        if (pageNumberElement) {
+          const pageMatch = pageNumberElement.textContent?.match(/Page (\d+)/);
+          if (pageMatch) {
+            pageNumber = parseInt(pageMatch[1], 10);
+          }
+        }
+        
+        // Open the image viewer
+        setViewerImageUrl(imageUrl);
+        setViewerPageNumber(pageNumber);
+        setImageViewerOpen(true);
+        
+        // Expand the cell
+        onToggleCellExpansion(rowId, columnType);
+      };
       
-      if (imgElement) {
-        // Define the click handler
-        const clickHandler = (e: MouseEvent) => {
-          e.stopPropagation();
-          setViewerImageUrl(imageUrl);
-          setViewerPageNumber(parseInt(pageNumber, 10));
-          setImageViewerOpen(true);
-        };
-        
-        // Add the event listener
-        imgElement.addEventListener('click', clickHandler);
-        
-        // Add cleanup function to array
-        cleanupFunctions.push(() => {
-          imgElement.removeEventListener('click', clickHandler);
-        });
-      }
+      // Add event listener
+      img.addEventListener('click', clickHandler);
+      
+      // Add cleanup function
+      cleanupFunctions.push(() => {
+        img.removeEventListener('click', clickHandler);
+      });
     });
     
-    // Return a single cleanup function that calls all the individual cleanup functions
+    return cleanupFunctions;
+  }, [setViewerImageUrl, setViewerPageNumber, setImageViewerOpen, onToggleCellExpansion]);
+
+  // Update the useEffect to use the new helper function
+  useEffect(() => {
+    // Store all cleanup functions
+    const allCleanupFunctions: (() => void)[] = [];
+    
+    // Process each visible row
+    qaPairs
+      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+      .forEach(qa => {
+        // Find all context cells with HTML content
+        const contextContent = qa.context as string;
+        if (contextContent.includes('<div class="pdf-page-image">')) {
+          // Find the cell in the DOM
+          const cellElement = document.querySelector(`[data-qa-id="${qa.id}"][data-column-type="context"]`);
+          if (cellElement) {
+            // Attach click handlers to all images in this cell
+            const cleanups = attachImageClickHandlers(cellElement as HTMLElement, qa.id, 'context');
+            allCleanupFunctions.push(...cleanups);
+          }
+        }
+      });
+    
+    // Return cleanup function
     return () => {
-      cleanupFunctions.forEach(cleanup => cleanup());
+      allCleanupFunctions.forEach(cleanup => cleanup());
     };
-  }, [page, rowsPerPage, qaPairs]); // Re-run when visible rows change
+  }, [page, rowsPerPage, qaPairs, attachImageClickHandlers]);
+
+  // Function to handle selected regions from the image viewer
+  const handleImageRegionSelect = (regions: Region[]) => {
+    // Only process if there are new regions
+    if (regions.length === 0) return;
+    
+    // Create new QA pairs for each region
+    const newQAPairs: QAPair[] = regions.map((region, index) => {
+      // Create HTML content for the image region with better styling
+      const imageHtml = `<div class="pdf-page-image">
+        <div class="page-number">Page ${viewerPageNumber} - Region ${index + 1}</div>
+        <img 
+          src="${region.imageData}" 
+          alt="Selected region from page ${viewerPageNumber}"
+          style="display: block; margin: 0 auto;"
+        />
+      </div>`;
+      
+      // Add the region as a new chunk to the QA list
+      return {
+        id: Date.now() + Math.floor(Math.random() * 1000) + index, // Generate unique numeric ID
+        context: imageHtml,
+        question: '',
+        answer: '',
+        sources: `Page ${viewerPageNumber} (Region ${index + 1})`,
+        selected: false
+      };
+    });
+    
+    // Add all new regions to the QA list - adding at the beginning for better visibility
+    onQAPairChange([...newQAPairs, ...qaPairs]);
+    
+    // Auto-expand the cells containing the new regions
+    setTimeout(() => {
+      // Create a new expanded cells object
+      const newExpandedCells = { ...expandedCells };
+      
+      // Set each new region's cell to be expanded
+      newQAPairs.forEach(pair => {
+        newExpandedCells[`${pair.id}-context`] = true;
+      });
+      
+      // Update expanded cells
+      onToggleCellExpansion(newQAPairs[0].id, 'context');
+    }, 100);
+    
+    // Show confirmation
+    alert(`Added ${regions.length} image region${regions.length > 1 ? 's' : ''} to the table. Click on the thumbnails to view them full size.`);
+    
+    // Close the image viewer after a short delay to allow user to see confirmation
+    setTimeout(() => {
+      setImageViewerOpen(false);
+    }, 500);
+  };
 
   return (
     <TableContainer sx={{ 
@@ -359,6 +456,8 @@ const TableView: React.FC<TableViewProps> = ({
                       <TableCell 
                         key={columnType}
                         onClick={() => onToggleCellExpansion(qa.id, columnType)}
+                        data-qa-id={qa.id}
+                        data-column-type={columnType}
                         sx={{ 
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
@@ -415,9 +514,12 @@ const TableView: React.FC<TableViewProps> = ({
                                 fontSize: '0.875rem',
                                 lineHeight: 1.5,
                                 minHeight: isExpanded ? 'auto' : '4.5em',
+                                // Ensure the container has enough space to show images
+                                maxHeight: isExpanded ? 'none' : '150px',
                                 '& img': {
                                   maxWidth: '100%',
                                   height: 'auto',
+                                  maxHeight: isExpanded ? 'none' : '120px',
                                   borderRadius: '4px',
                                   boxShadow: theme.palette.mode === 'dark' 
                                     ? '0 2px 8px rgba(0,0,0,0.5)' 
@@ -430,6 +532,23 @@ const TableView: React.FC<TableViewProps> = ({
                                       ? '0 4px 12px rgba(0,0,0,0.7)' 
                                       : '0 4px 12px rgba(0,0,0,0.25)',
                                   }
+                                },
+                                // Highlight the pdf-page-image container
+                                '& .pdf-page-image': {
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  borderRadius: '6px',
+                                  padding: '8px',
+                                  marginBottom: '8px',
+                                  backgroundColor: theme.palette.mode === 'dark' 
+                                    ? 'rgba(0, 0, 0, 0.2)' 
+                                    : 'rgba(0, 0, 0, 0.03)',
+                                },
+                                // Style the page number
+                                '& .page-number': {
+                                  fontSize: '0.75rem',
+                                  color: theme.palette.text.secondary,
+                                  marginBottom: '4px',
+                                  fontWeight: 500,
                                 },
                                 '& p': {
                                   margin: '8px 0',
@@ -445,6 +564,12 @@ const TableView: React.FC<TableViewProps> = ({
                                   setViewerImageUrl(imageInfo.url);
                                   setViewerPageNumber(imageInfo.pageNumber);
                                   setImageViewerOpen(true);
+                                  // Also expand the cell to show the full image
+                                  onToggleCellExpansion(qa.id, columnType);
+                                } else {
+                                  // If we don't have image info but this is an HTML cell,
+                                  // just expand the cell to make it easier to see
+                                  onToggleCellExpansion(qa.id, columnType);
                                 }
                               }}
                               ref={(node: HTMLDivElement | null) => {
@@ -533,6 +658,7 @@ const TableView: React.FC<TableViewProps> = ({
         onClose={() => setImageViewerOpen(false)}
         imageUrl={viewerImageUrl}
         pageNumber={viewerPageNumber}
+        onRegionSelect={handleImageRegionSelect}
       />
     </TableContainer>
   );
