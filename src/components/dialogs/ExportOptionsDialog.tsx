@@ -405,8 +405,9 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
         throw new Error(`Failed to parse valid IDs from model response: ${responseText}`);
       }
       
-      // Return only the pairs with valid IDs
-      return batch.filter(pair => validIds.includes(pair.id));
+      // Store valid IDs as strings
+      const validIdsAsString = validIds.map(id => String(id));
+      return batch.filter(pair => validIdsAsString.includes(String(pair.id)));
     } catch (error) {
       console.error("Error calling Ollama:", error);
       throw error;

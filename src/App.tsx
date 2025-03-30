@@ -71,7 +71,7 @@ import ExportOptionsDialog, { ExportOptions } from './components/dialogs/ExportO
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
 // Import QAPair and other types from types/index.ts instead of defining them here
-import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, Edge as EdgeType } from './types';
+import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry } from './types';
 
 interface AppProps {
   onThemeChange: () => void;

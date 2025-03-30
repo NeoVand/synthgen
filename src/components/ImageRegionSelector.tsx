@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import ReactCrop, { Crop, ReactCropProps } from 'react-image-crop';
+import ReactCrop, { Crop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { Box, Typography, IconButton, useTheme } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
+import { Box, Typography, IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -28,23 +27,15 @@ interface ImageRegionSelectorProps {
 const ImageRegionSelector: React.FC<ImageRegionSelectorProps> = ({
   imgSrc,
   onRegionSelect,
-  disabled = false
+  disabled = false,
 }) => {
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const [crop, setCrop] = useState<Crop>({
-    aspect: undefined,
-    unit: '%',
-    width: 30,
-    height: 30
-  });
-  const [completedCrop, setCompletedCrop] = useState<Crop | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [crop, setCrop] = useState<Crop>({ unit: 'px', width: 0, height: 0, x: 0, y: 0 });
   const [regions, setRegions] = useState<Region[]>([]);
-  const [isSelecting, setIsSelecting] = useState<boolean>(false);
-  const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   
   // Generate region colors
-  const getRegionColors = useCallback((isDark: boolean): { bg: string[], border: string[] } => {
+  const getRegionColors = useCallback((): { bg: string[], border: string[] } => {
     const colors = [
       { base: '#ff5722', name: 'orange' },
       { base: '#2196f3', name: 'blue' },
@@ -60,105 +51,95 @@ const ImageRegionSelector: React.FC<ImageRegionSelectorProps> = ({
     };
   }, []);
   
-  const { bg: bgColors, border: borderColors } = getRegionColors(isDark);
-  
-  // Get scale factors based on displayed vs natural image size
-  const getScaleFactors = useCallback(() => {
-    if (!imgRef.current) return { scaleX: 1, scaleY: 1 };
-    
-    const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
-    const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
-    
-    return { scaleX, scaleY };
-  }, []);
+  const { bg: bgColors, border: borderColors } = getRegionColors();
   
   // Generate cropped image from selection
-  const generateCroppedImage = useCallback((pixelCrop: Crop | null): string => {
-    if (!pixelCrop || !imgRef.current || 
+  const generateCroppedImage = useCallback((pixelCrop: Crop): string => {
+    if (!imgRef.current || 
         typeof pixelCrop.x !== 'number' || 
         typeof pixelCrop.y !== 'number' || 
         typeof pixelCrop.width !== 'number' || 
-        typeof pixelCrop.height !== 'number') return '';
+        typeof pixelCrop.height !== 'number' ||
+        pixelCrop.width === 0 ||
+        pixelCrop.height === 0) {
+          console.error('generateCroppedImage: Invalid pixelCrop provided', pixelCrop);
+          return '';
+        }
     
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return '';
     
-    const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
-    const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
-
-    const pixelRatio = window.devicePixelRatio || 1;
-
-    // Set canvas size to the size of the cropped area
-    canvas.width = pixelCrop.width * scaleX;
-    canvas.height = pixelCrop.height * scaleY;
+    canvas.width = pixelCrop.width;
+    canvas.height = pixelCrop.height;
     
-    // Draw the image to the canvas
     ctx.drawImage(
       imgRef.current,
-      pixelCrop.x * scaleX,
-      pixelCrop.y * scaleY,
-      pixelCrop.width * scaleX,
-      pixelCrop.height * scaleY,
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height,
       0,
       0,
-      pixelCrop.width * scaleX,
-      pixelCrop.height * scaleY,
+      canvas.width,
+      canvas.height
     );
     
-    // Convert canvas to base64 encoded string
     return canvas.toDataURL('image/jpeg');
   }, []);
   
-  // Save the current selection as a region
-  const saveRegion = useCallback(() => {
-    if (!completedCrop || !imgRef.current || 
-        typeof completedCrop.x !== 'number' || 
-        typeof completedCrop.y !== 'number' || 
-        typeof completedCrop.width !== 'number' || 
-        typeof completedCrop.height !== 'number') return;
-    
-    // Generate cropped image
-    const imageData = generateCroppedImage(completedCrop);
-    
-    // Create new region
+  // Function to add a new region based on a completed pixel crop (parameter type Crop)
+  const addRegion = useCallback((newPixelCrop: Crop) => {
+    // Add checks for undefined properties, although onComplete should provide them
+    if (!imgRef.current || 
+        typeof newPixelCrop.x !== 'number' || 
+        typeof newPixelCrop.y !== 'number' || 
+        typeof newPixelCrop.width !== 'number' || 
+        typeof newPixelCrop.height !== 'number' ||
+        newPixelCrop.width === 0 || 
+        newPixelCrop.height === 0) {
+          console.warn('addRegion: Received invalid or zero-dimension crop', newPixelCrop);
+          return; // Do not add region if crop is invalid
+        }
+
+    // Now TypeScript knows x, y, width, height are numbers here
+    const safePixelCrop = newPixelCrop as Required<Crop>; // Assert type after checks
+
+    const imageData = generateCroppedImage(safePixelCrop);
+    if (!imageData) return;
+
     const newRegion: Region = {
       id: uuidv4(),
       crop: {
-        x: completedCrop.x,
-        y: completedCrop.y,
-        width: completedCrop.width,
-        height: completedCrop.height,
+        x: safePixelCrop.x,
+        y: safePixelCrop.y,
+        width: safePixelCrop.width,
+        height: safePixelCrop.height,
         originalWidth: imgRef.current.naturalWidth,
         originalHeight: imgRef.current.naturalHeight
       },
       imageData
     };
-    
-    // Add to regions array
-    const updatedRegions = [...regions, newRegion];
-    setRegions(updatedRegions);
-    
-    // Notify parent component
-    onRegionSelect(updatedRegions);
-    
-    // Reset current selection
-    setCrop({
-      aspect: undefined,
-      unit: '%',
-      width: 30,
-      height: 30
+
+    setRegions(prevRegions => {
+      const updatedRegions = [...prevRegions, newRegion];
+      onRegionSelect(updatedRegions);
+      return updatedRegions;
     });
-    setCompletedCrop(null);
-    setIsSelecting(false);
-  }, [completedCrop, generateCroppedImage, onRegionSelect, regions]);
+
+    // Reset the visual crop selection in ReactCrop to an empty state
+    setCrop({ unit: 'px', width: 0, height: 0, x: 0, y: 0 });
+
+  }, [generateCroppedImage, onRegionSelect]);
   
   // Delete a region
   const deleteRegion = useCallback((id: string) => {
-    const updatedRegions = regions.filter(region => region.id !== id);
-    setRegions(updatedRegions);
-    onRegionSelect(updatedRegions);
-  }, [regions, onRegionSelect]);
+    setRegions(prevRegions => {
+        const updatedRegions = prevRegions.filter(region => region.id !== id);
+        onRegionSelect(updatedRegions);
+        return updatedRegions;
+    });
+  }, [onRegionSelect]);
   
   // Handle window resize
   useEffect(() => {
@@ -178,12 +159,6 @@ const ImageRegionSelector: React.FC<ImageRegionSelectorProps> = ({
       }
       resizeObserver.disconnect();
     };
-  }, []);
-  
-  // Handler for image load
-  const onImageLoaded = useCallback((image: HTMLImageElement) => {
-    imgRef.current = image;
-    return false; // Important: Return false here to update crop state in onImageLoaded
   }, []);
   
   // Render regions overlay
@@ -287,92 +262,42 @@ const ImageRegionSelector: React.FC<ImageRegionSelectorProps> = ({
   
   return (
     <Box 
+      ref={containerRef}
       sx={{
         position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        width: '100%',
-        height: '100%'
+        display: 'inline-block',
+        cursor: disabled ? 'not-allowed' : 'crosshair',
+        maxWidth: '100%',
+        lineHeight: 0,
       }}
     >
-      {/* Instructions heading */}
-      <Box 
-        sx={{ 
-          position: 'absolute', 
-          top: 10, 
-          left: '50%', 
-          transform: 'translateX(-50%)',
-          zIndex: 10,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: 'white',
-          padding: '8px 16px',
-          borderRadius: '4px',
-          fontSize: '14px',
-          fontWeight: 'medium',
-          textAlign: 'center',
-          maxWidth: '80%'
-        }}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-          {regions.length === 0 
-            ? 'Click and drag to select a region of the image' 
-            : `${regions.length} region${regions.length !== 1 ? 's' : ''} selected - click and drag to add more`}
-        </Typography>
-      </Box>
-
       <ReactCrop
         src={imgSrc}
         crop={crop}
-        onChange={(c) => {
-          setCrop(c);
-          setIsSelecting(c.width !== 0 && c.height !== 0);
-        }}
+        onChange={(c) => setCrop(c)}
         onComplete={(c) => {
-          setCompletedCrop(c);
+          if (c.width && c.height) {
+            setTimeout(() => addRegion(c), 0); 
+          }
         }}
-        className="region-selector-container"
         disabled={disabled}
-        style={{ 
-          maxWidth: '100%', 
-          maxHeight: 'calc(100vh - 200px)',
-          margin: '20px auto'
-        }}
-        onImageLoaded={onImageLoaded}
-      />
-
-      {/* Selection controls */}
-      {isSelecting && completedCrop && (
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: 60,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 10,
-            display: 'flex',
-            justifyContent: 'center',
-            gap: 2
+        style={{ display: 'block' }}
+      >
+        <img
+          ref={imgRef}
+          src={imgSrc}
+          alt="Selectable Region"
+          style={{ 
+            opacity: disabled ? 0.6 : 1,
+            maxWidth: 'none',
+            maxHeight: 'none',
+            display: 'block',
+            userSelect: 'none',
           }}
-        >
-          <IconButton
-            onClick={saveRegion}
-            sx={{
-              backgroundColor: 'primary.main',
-              color: 'white',
-              '&:hover': {
-                backgroundColor: 'primary.dark',
-              },
-              width: 48,
-              height: 48
-            }}
-          >
-            <AddIcon />
-          </IconButton>
-        </Box>
-      )}
-
-      {/* Render existing regions */}
+          onLoad={(e) => { imgRef.current = e.currentTarget; }}
+        />
+      </ReactCrop>
+      
       {renderRegionsOverlay()}
     </Box>
   );

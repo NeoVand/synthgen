@@ -1,15 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
   IconButton,
   Box,
-  useTheme,
   Slide,
-  Zoom,
   Tooltip,
   Button,
-  Typography
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
@@ -43,56 +40,164 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
   pageNumber,
   onRegionSelect
 }) => {
-  const theme = useTheme();
-  const [zoomLevel, setZoomLevel] = React.useState(1);
-  const [isSelectionMode, setIsSelectionMode] = React.useState(false);
-  const [regions, setRegions] = React.useState<Region[]>([]);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const viewerRef = useRef<HTMLDivElement>(null);
   
-  // Reset zoom and selection mode when opening a new image
-  React.useEffect(() => {
+  // Reset zoom, pan and selection mode when opening a new image
+  useEffect(() => {
     if (open) {
       setZoomLevel(1);
+      setPan({ x: 0, y: 0 });
       setIsSelectionMode(false);
       setRegions([]);
+      setIsDragging(false);
     }
   }, [open, imageUrl]);
 
+  // Unified Zoom Handler (zooms towards point)
+  const handleZoom = useCallback((delta: number, clientX?: number, clientY?: number) => {
+    if (!viewerRef.current) return;
+
+    const newZoom = Math.max(0.1, Math.min(zoomLevel + delta, 5));
+    if (newZoom === zoomLevel) return;
+
+    const viewerRect = viewerRef.current.getBoundingClientRect();
+
+    const originX = clientX !== undefined ? clientX - viewerRect.left : viewerRect.width / 2;
+    const originY = clientY !== undefined ? clientY - viewerRect.top : viewerRect.height / 2;
+
+    const imageX = (originX - pan.x) / zoomLevel;
+    const imageY = (originY - pan.y) / zoomLevel;
+
+    const newPanX = originX - imageX * newZoom;
+    const newPanY = originY - imageY * newZoom;
+
+    setZoomLevel(newZoom);
+    setPan({ x: newPanX, y: newPanY });
+  }, [zoomLevel, pan.x, pan.y]);
+  
+  const toggleSelectionMode = useCallback(() => {
+    setIsSelectionMode(prev => {
+        const enteringSelectionMode = !prev;
+        if (enteringSelectionMode) {
+            setRegions([]);
+        }
+        return enteringSelectionMode;
+    });
+  }, []);
+  
+  const handleRegionsChange = useCallback((selectedRegions: Region[]) => {
+    setTimeout(() => {
+       setRegions(selectedRegions);
+    }, 0);
+  }, []);
+  
+  const handleSaveRegions = useCallback(() => {
+    if (onRegionSelect && regions.length > 0) {
+      onRegionSelect(regions);
+    } else if (regions.length === 0) {
+      alert('Please select at least one region before saving');
+    } else {
+      setIsSelectionMode(false);
+    }
+  }, [onRegionSelect, regions]);
+  
+  const handleCancelSelection = useCallback(() => {
+    setIsSelectionMode(false);
+    setRegions([]);
+  }, []);
+  
+  // Mouse Down Handler for Panning
+  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isSelectionMode || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+    setDragStart({
+      x: event.clientX - pan.x,
+      y: event.clientY - pan.y,
+    });
+    if (viewerRef.current) {
+      viewerRef.current.style.cursor = 'grabbing';
+    }
+  }, [isSelectionMode, pan.x, pan.y]);
+  
+  // Mouse Move Handler for Panning
+  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || isSelectionMode) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setPan({
+      x: event.clientX - dragStart.x,
+      y: event.clientY - dragStart.y,
+    });
+  }, [isDragging, isSelectionMode, dragStart.x, dragStart.y]);
+  
+  // Mouse Up/Leave Handler for Panning
+  const handleMouseUpOrLeave = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || isSelectionMode) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    if (viewerRef.current) {
+      viewerRef.current.style.cursor = 'grab';
+    }
+  }, [isDragging, isSelectionMode]);
+  
+  // Wheel Handler for Zooming
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (isSelectionMode) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const delta = -event.deltaY * 0.005;
+    handleZoom(delta, event.clientX, event.clientY);
+  }, [isSelectionMode, handleZoom]);
+  
   // Handle keyboard navigation
-  React.useEffect(() => {
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!open) return;
-      
-      switch (event.key) {
-        case 'Escape':
-          if (isSelectionMode) {
-            setIsSelectionMode(false);
-          } else {
+
+      if (event.key === 'Escape') {
+         if (isSelectionMode) {
+            handleCancelSelection();
+            event.preventDefault();
+            return;
+         } else {
             onClose();
-          }
-          break;
+            event.preventDefault();
+            return;
+         }
+      }
+
+      if (isSelectionMode) return;
+
+      switch (event.key) {
         case '+':
-        case '=': // Same key as + on most keyboards
-          if (!isSelectionMode) {
-            handleZoomIn();
-            event.preventDefault();
-          }
-          break;
-        case '-':
-          if (!isSelectionMode) {
-            handleZoomOut();
-            event.preventDefault();
-          }
-          break;
-        case '0':
-          if (!isSelectionMode) {
-            setZoomLevel(1); // Reset zoom
-            event.preventDefault();
-          }
-          break;
-        case 'c':
-          toggleSelectionMode();
+        case '=':
+          handleZoom(0.25);
           event.preventDefault();
           break;
+        case '-':
+          handleZoom(-0.25);
+          event.preventDefault();
+          break;
+        case '0':
+          setZoomLevel(1);
+          setPan({ x: 0, y: 0 });
+          event.preventDefault();
+          break;
+        case 'c':
+           if (onRegionSelect) {
+              toggleSelectionMode();
+              event.preventDefault();
+           }
+           break;
       }
     };
     
@@ -100,43 +205,7 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open, onClose, isSelectionMode]);
-  
-  const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(prev + 0.25, 3)); // Max zoom 3x
-  };
-  
-  const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(prev - 0.25, 0.5)); // Min zoom 0.5x
-  };
-  
-  const toggleSelectionMode = () => {
-    setIsSelectionMode(prev => !prev);
-  };
-  
-  const handleRegionSelect = (selectedRegions: Region[]) => {
-    setRegions(selectedRegions);
-    if (onRegionSelect) {
-      onRegionSelect(selectedRegions);
-    }
-  };
-  
-  const handleSaveRegions = () => {
-    if (onRegionSelect && regions.length > 0) {
-      onRegionSelect(regions);
-      // Don't close selection mode here - the parent component will close the dialog
-      // after processing the regions
-    } else if (regions.length === 0) {
-      // Show a message if no regions are selected
-      alert('Please select at least one region before saving');
-    } else {
-      setIsSelectionMode(false);
-    }
-  };
-  
-  const handleCancelSelection = () => {
-    setIsSelectionMode(false);
-  };
+  }, [open, onClose, isSelectionMode, onRegionSelect, handleCancelSelection, handleZoom, toggleSelectionMode]);
   
   return (
     <Dialog
@@ -148,7 +217,7 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
       PaperProps={{
         sx: {
           borderRadius: '12px',
-          bgcolor: '#f5f5f5', // Light beige background
+          bgcolor: '#f5f5f5',
           width: '90vw',
           height: '90vh',
           maxWidth: '1600px',
@@ -156,6 +225,7 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
           m: 'auto',
           overflow: 'hidden',
           position: 'relative',
+          cursor: isSelectionMode ? 'crosshair' : (isDragging ? 'grabbing' : 'grab'),
         }
       }}
       BackdropProps={{
@@ -165,14 +235,13 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
       }}
     >
       <DialogContent 
+        ref={viewerRef}
         sx={{ 
           p: 0, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
           height: '100%',
-          overflow: 'auto',
-          bgcolor: '#f5f5f5', // Ensure consistent beige background
+          overflow: 'hidden',
+          position: 'relative',
+          bgcolor: '#f5f5f5',
           '&::-webkit-scrollbar': {
             width: '8px',
             height: '8px'
@@ -190,41 +259,56 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
             }
           }
         }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
+        onWheel={handleWheel}
       >
-        <Zoom in={open}>
-          <Box
-            sx={{
-              position: 'relative',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              width: '100%',
-              height: '100%',
-              bgcolor: '#f5f5f5' // Ensure consistent beige background
-            }}
-          >
-            {isSelectionMode ? (
-              <ImageRegionSelector 
-                imgSrc={imageUrl} 
-                onRegionSelect={handleRegionSelect}
-              />
-            ) : (
-              <img
-                src={imageUrl}
-                alt={`PDF Page ${pageNumber}`}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
-                  borderRadius: '4px',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                  transform: `scale(${zoomLevel})`,
-                  transition: 'transform 0.2s ease'
-                }}
-              />
-            )}
-          </Box>
-        </Zoom>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})`,
+            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+            transformOrigin: 'top left',
+            willChange: 'transform',
+          }}
+        >
+          {isSelectionMode ? (
+            <ImageRegionSelector 
+              key="selector"
+              imgSrc={imageUrl}
+              onRegionSelect={handleRegionsChange}
+            />
+          ) : (
+            <img
+              key="image"
+              src={imageUrl}
+              alt={`PDF Page ${pageNumber}`}
+              style={{
+                maxWidth: 'none',
+                maxHeight: 'none',
+                objectFit: 'contain',
+                borderRadius: '4px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                pointerEvents: 'none',
+                width: 'auto',
+                height: 'auto',
+                display: 'block',
+                minWidth: zoomLevel < 0.5 ? '200%' : (zoomLevel < 1 ? '100%' : 'auto')
+              }}
+              draggable={false}
+              onLoad={(_e) => {
+                if (viewerRef.current && zoomLevel === 1 && pan.x === 0 && pan.y === 0) {
+                  viewerRef.current.scrollLeft = 0;
+                  viewerRef.current.scrollTop = 0;
+                }
+              }}
+            />
+          )}
+        </Box>
       </DialogContent>
       
       {/* Close button */}
@@ -233,16 +317,14 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
         onClick={onClose}
         sx={{
           position: 'absolute',
-          right: 16,
-          top: 16,
-          color: 'rgba(0, 0, 0, 0.7)',
-          bgcolor: 'rgba(255, 255, 255, 0.8)',
+          right: 8,
+          top: 8,
+          color: (theme) => theme.palette.grey[500],
+          zIndex: 1301,
+          bgcolor: 'rgba(255, 255, 255, 0.7)',
           '&:hover': {
-            bgcolor: 'rgba(255, 255, 255, 0.9)',
-          },
-          zIndex: 2,
-          width: 40,
-          height: 40
+             bgcolor: 'rgba(255, 255, 255, 0.9)',
+          }
         }}
       >
         <CloseIcon />
@@ -267,72 +349,82 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
       </Box>
       
       {/* Control panel */}
-      <Box
-        sx={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          justifyContent: 'center',
-          padding: '12px',
-          bgcolor: 'rgba(255, 255, 255, 0.8)',
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid rgba(0, 0, 0, 0.1)',
-          zIndex: 2,
-        }}
-      >
-        {isSelectionMode ? (
-          <>
-            <Box sx={{ mr: 2, display: 'flex', alignItems: 'center' }}>
-              <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'text.secondary' }}>
-                {regions.length === 0 
-                  ? 'Draw a box around a region to select it' 
-                  : `${regions.length} region${regions.length !== 1 ? 's' : ''} selected`}
-              </Typography>
-            </Box>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleSaveRegions}
-              disabled={regions.length === 0}
-              sx={{ mr: 1, px: 3 }}
-            >
-              Save Regions
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={handleCancelSelection}
-              sx={{ px: 3 }}
-            >
-              Cancel
-            </Button>
-          </>
-        ) : (
-          <>
-            <Tooltip title="Zoom In">
-              <IconButton onClick={handleZoomIn} size="large" sx={{ mx: 1 }}>
-                <ZoomInIcon />
-              </IconButton>
+      {!isSelectionMode && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            bgcolor: 'rgba(0, 0, 0, 0.6)',
+            padding: '8px 12px',
+            borderRadius: '16px',
+            zIndex: 1301,
+            pointerEvents: 'none',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pointerEvents: 'auto' }}>
+            <Tooltip title="Zoom In (+)">
+              <span style={{ display: 'inline-block' }}>
+                <IconButton onClick={() => handleZoom(0.25)} size="small" sx={{ color: 'white' }} disabled={zoomLevel >= 5}>
+                  <ZoomInIcon />
+                </IconButton>
+              </span>
             </Tooltip>
-            <Tooltip title="Zoom Out">
-              <IconButton onClick={handleZoomOut} size="large" sx={{ mx: 1 }}>
-                <ZoomOutIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Select Regions">
+            <Tooltip title={`Zoom: ${Math.round(zoomLevel * 100)}% (Reset: 0)`}>
               <Button
-                variant="contained"
-                startIcon={<CropIcon />}
-                onClick={toggleSelectionMode}
-                sx={{ mx: 1, px: 2 }}
+                onClick={() => { setZoomLevel(1); setPan({ x: 0, y: 0 }); }}
+                size="small"
+                sx={{ color: 'white', textTransform: 'none', minWidth: '45px' }}
               >
-                Select Regions
+                {`${Math.round(zoomLevel * 100)}%`}
               </Button>
             </Tooltip>
-          </>
-        )}
-      </Box>
+            <Tooltip title="Zoom Out (-)">
+              <span style={{ display: 'inline-block' }}>
+                <IconButton onClick={() => handleZoom(-0.25)} size="small" sx={{ color: 'white' }} disabled={zoomLevel <= 0.1}>
+                  <ZoomOutIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {onRegionSelect && (
+              <Tooltip title="Crop Regions (C)">
+                <IconButton onClick={toggleSelectionMode} size="small" sx={{ color: 'white' }}>
+                  <CropIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        </Box>
+      )}
+      
+      {/* Selection Mode Controls */}
+      {isSelectionMode && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            gap: 1,
+            bgcolor: 'rgba(0, 0, 0, 0.6)',
+            padding: '8px 12px',
+            borderRadius: '16px',
+            zIndex: 1301,
+          }}
+        >
+          <Button onClick={handleSaveRegions} variant="contained" color="primary" size="small">
+            Save Regions
+          </Button>
+          <Button onClick={handleCancelSelection} variant="outlined" size="small" sx={{ color: 'white', borderColor: 'white', '&:hover': { borderColor: 'rgba(255,255,255,0.7)', bgcolor: 'rgba(255,255,255,0.1)' } }}>
+            Cancel Crop
+          </Button>
+        </Box>
+      )}
       
       {/* Keyboard shortcuts help */}
       <Box
@@ -349,7 +441,7 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
           zIndex: 2
         }}
       >
-        {isSelectionMode ? 'ESC to cancel • Draw to select regions' : 'ESC to close • + / - to zoom • 0 to reset zoom • C to select regions'}
+        {isSelectionMode ? 'ESC to cancel • Draw to select regions' : 'ESC to close • + / - to zoom • 0 to reset zoom • C to select regions' + (zoomLevel > 1 ? ' • Drag to pan' : '')}
       </Box>
     </Dialog>
   );

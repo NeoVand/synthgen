@@ -93,15 +93,7 @@ const TableView: React.FC<TableViewProps> = ({
     onQAPairChange(updatedQAPairs);
   };
 
-  // Add function to handle image click
-  const handleImageClick = (e: React.MouseEvent, dataUrl: string, pageNumber: number) => {
-    e.stopPropagation(); // Prevent cell expansion toggle
-    setViewerImageUrl(dataUrl);
-    setViewerPageNumber(pageNumber);
-    setImageViewerOpen(true);
-  };
-  
-  // Helper to extract image URL and page number from HTML content
+  // Helper to extract image info from HTML content
   const extractImageInfo = (htmlContent: string): { url: string; pageNumber: number } | null => {
     // Simple regex to extract image source
     const imgSrcMatch = htmlContent.match(/src="([^"]+)"/);
