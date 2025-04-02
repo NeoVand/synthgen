@@ -193,13 +193,17 @@ const TableView: React.FC<TableViewProps> = ({
     
     // Create new QA pairs for each region
     const newQAPairs: QAPair[] = regions.map((region, index) => {
-      // Create HTML content for the image region with better styling
+      // Get the bare base64 data from the dataURL format (remove the "data:image/jpeg;base64," prefix)
+      const base64Data = region.imageData.split('base64,')[1];
+      
+      // Create clean HTML content for the image region with better styling
+      // Make sure we don't include any extra tags or styling that might confuse the model
       const imageHtml = `<div class="pdf-page-image">
         <div class="page-number">Page ${viewerPageNumber} - Region ${index + 1}</div>
         <img 
-          src="${region.imageData}" 
+          src="data:image/jpeg;base64,${base64Data}" 
           alt="Selected region from page ${viewerPageNumber}"
-          style="display: block; margin: 0 auto;"
+          style="display: block; margin: 0 auto; max-width: 100%;"
         />
       </div>`;
       

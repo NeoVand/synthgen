@@ -81,6 +81,34 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
     setPan({ x: newPanX, y: newPanY });
   }, [zoomLevel, pan.x, pan.y]);
   
+  // Add event listener for wheel with passive: false
+  useEffect(() => {
+    if (!viewerRef.current || isSelectionMode) return;
+    
+    const viewer = viewerRef.current;
+    
+    // Create a wheel event handler that can use passive: false
+    const wheelHandler = (e: WheelEvent) => {
+      if (isSelectionMode) return;
+      
+      // Only prevent default if we're zoomed in to avoid interfering with normal page scrolling
+      if (zoomLevel !== 1) {
+        e.preventDefault();
+      }
+      
+      const delta = -e.deltaY * 0.005;
+      handleZoom(delta, e.clientX, e.clientY);
+    };
+    
+    // Add the event listener with passive: false to allow preventDefault
+    viewer.addEventListener('wheel', wheelHandler, { passive: false });
+    
+    // Clean up
+    return () => {
+      viewer.removeEventListener('wheel', wheelHandler);
+    };
+  }, [isSelectionMode, zoomLevel, handleZoom]);
+  
   const toggleSelectionMode = useCallback(() => {
     setIsSelectionMode(prev => {
         const enteringSelectionMode = !prev;
@@ -148,15 +176,6 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
       viewerRef.current.style.cursor = 'grab';
     }
   }, [isDragging, isSelectionMode]);
-  
-  // Wheel Handler for Zooming
-  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    if (isSelectionMode) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const delta = -event.deltaY * 0.005;
-    handleZoom(delta, event.clientX, event.clientY);
-  }, [isSelectionMode, handleZoom]);
   
   // Handle keyboard navigation
   useEffect(() => {
@@ -263,7 +282,6 @@ const ImageViewerDialog: React.FC<ImageViewerDialogProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUpOrLeave}
         onMouseLeave={handleMouseUpOrLeave}
-        onWheel={handleWheel}
       >
         <Box
           sx={{

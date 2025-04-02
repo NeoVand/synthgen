@@ -66,13 +66,20 @@ const ImageRegionSelector: React.FC<ImageRegionSelectorProps> = ({
           return '';
         }
     
+    // Create a higher quality canvas for better image fidelity
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return '';
     
+    // Set dimensions to match the crop
     canvas.width = pixelCrop.width;
     canvas.height = pixelCrop.height;
     
+    // Set quality settings for better image rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    // Draw the cropped portion of the image
     ctx.drawImage(
       imgRef.current,
       pixelCrop.x,
@@ -85,7 +92,8 @@ const ImageRegionSelector: React.FC<ImageRegionSelectorProps> = ({
       canvas.height
     );
     
-    return canvas.toDataURL('image/jpeg');
+    // Use higher quality (0.95) for JPEG conversion
+    return canvas.toDataURL('image/jpeg', 0.95);
   }, []);
   
   // Function to add a new region based on a completed pixel crop (parameter type Crop)

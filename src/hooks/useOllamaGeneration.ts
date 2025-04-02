@@ -10,6 +10,40 @@ interface GenerateTextOptions {
   onComplete?: (fullText: string) => void;
 }
 
+// Helper to extract base64 image data from context HTML
+const extractBase64ImageFromHTML = (html: string): string | null => {
+  // Check if the HTML contains image
+  if (!html.includes('<div class="pdf-page-image">')) return null;
+  
+  try {
+    // Extract the base64 data from the src attribute with better regex pattern
+    // This pattern will capture the MIME type and the base64 data separately
+    const imgSrcMatch = html.match(/src="data:image\/([^;]+);base64,([^"]+)"/);
+    
+    if (!imgSrcMatch || imgSrcMatch.length < 3) {
+      console.log('[DEBUG] Failed to extract base64 image data from HTML');
+      return null;
+    }
+    
+    const mimeType = imgSrcMatch[1];
+    const base64Data = imgSrcMatch[2];
+    
+    // Perform basic validation on the base64 data
+    if (!base64Data || base64Data.length < 100) { // Arbitrary minimum length to ensure we have actual data
+      console.log('[DEBUG] Extracted base64 data is too short or invalid');
+      return null;
+    }
+    
+    // Only log the length to avoid huge console output
+    console.log(`[DEBUG] Successfully extracted base64 image data (${mimeType}), length: ${base64Data.length}`);
+    
+    return base64Data;
+  } catch (error) {
+    console.error('[DEBUG] Error extracting base64 image data:', error);
+    return null;
+  }
+};
+
 export const useOllamaGeneration = () => {
   const {
     ollamaSettings,
@@ -30,28 +64,70 @@ export const useOllamaGeneration = () => {
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
       
+      // Check if the prompt includes image HTML
+      const containsImageHtml = prompt.includes('<div class="pdf-page-image">');
+      if (containsImageHtml) {
+        console.log('[DEBUG] Detected image HTML in prompt');
+      }
+      
+      // Extract image data and clean prompt if needed
+      let imageBase64 = null;
+      let cleanPrompt = prompt;
+      
+      if (containsImageHtml) {
+        // Extract the base64 image data
+        imageBase64 = extractBase64ImageFromHTML(prompt);
+        
+        // More thoroughly remove all HTML from the prompt
+        // First capture the main text outside the HTML
+        const beforeHtml = prompt.split('<div class="pdf-page-image">')[0];
+        const afterHtml = prompt.split('</div>').pop() || '';
+        
+        // Combine the text parts with a simple indicator
+        cleanPrompt = beforeHtml + 'I have provided an image for analysis.' + afterHtml;
+        
+        console.log('[DEBUG] Cleaned prompt:', cleanPrompt.substring(0, 200) + '...');
+      }
+      
+      // Prepare request body based on whether we have an image
+      const requestBody: any = {
+        model: ollamaSettings.model,
+        prompt: cleanPrompt,
+        options: {
+          temperature: ollamaSettings.temperature,
+          top_p: ollamaSettings.topP,
+          seed: ollamaSettings.useFixedSeed ? ollamaSettings.seed : undefined,
+          num_ctx: ollamaSettings.numCtx,
+        },
+        stream: true,
+      };
+      
+      // Add images array if we have an image
+      if (imageBase64) {
+        requestBody.images = [imageBase64];
+        console.log('[DEBUG] Added image data to request. Request structure:', 
+          JSON.stringify({
+            ...requestBody,
+            images: ['[BASE64_DATA_PRESENT]'] // Don't log the actual base64 data
+          }, null, 2)
+        );
+      }
+      
+      console.log('[DEBUG] Sending request to Ollama API with model:', ollamaSettings.model);
+      
       const response = await fetch(`${OLLAMA_API_BASE}/api/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: ollamaSettings.model,
-          prompt: prompt,
-          options: {
-            temperature: ollamaSettings.temperature,
-            top_p: ollamaSettings.topP,
-            seed: ollamaSettings.useFixedSeed ? ollamaSettings.seed : undefined,
-            num_ctx: ollamaSettings.numCtx,
-          },
-          stream: true,
-        }),
+        body: JSON.stringify(requestBody),
         signal,
       });
 
       // Handle errors
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[DEBUG] Ollama API error:', response.status, errorText);
         throw new Error(`Ollama API error: ${response.status} ${errorText}`);
       }
 
