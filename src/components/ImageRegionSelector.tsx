@@ -1,7 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import ReactCrop, { Crop } from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
-import { Box, Typography, IconButton } from '@mui/material';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Box, Button, Typography, IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -29,284 +27,450 @@ const ImageRegionSelector: React.FC<ImageRegionSelectorProps> = ({
   onRegionSelect,
   disabled = false,
 }) => {
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [crop, setCrop] = useState<Crop>({ unit: 'px', width: 0, height: 0, x: 0, y: 0 });
   const [regions, setRegions] = useState<Region[]>([]);
-  
+  const imageRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef<HTMLDivElement>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
+  const [selectionCurrent, setSelectionCurrent] = useState({ x: 0, y: 0 });
+  const [imageLoaded, setImageLoaded] = useState(false);
+
   // Generate region colors
-  const getRegionColors = useCallback((): { bg: string[], border: string[] } => {
-    const colors = [
-      { base: '#ff5722', name: 'orange' },
-      { base: '#2196f3', name: 'blue' },
-      { base: '#4caf50', name: 'green' },
-      { base: '#9c27b0', name: 'purple' },
-      { base: '#e91e63', name: 'pink' },
-      { base: '#00bcd4', name: 'cyan' }
-    ];
+  const colors = [
+    { bg: 'rgba(255, 87, 34, 0.35)', border: 'rgba(255, 87, 34, 0.7)' }, // orange
+    { bg: 'rgba(33, 150, 243, 0.35)', border: 'rgba(33, 150, 243, 0.7)' }, // blue
+    { bg: 'rgba(76, 175, 80, 0.35)', border: 'rgba(76, 175, 80, 0.7)' }, // green
+    { bg: 'rgba(156, 39, 176, 0.35)', border: 'rgba(156, 39, 176, 0.7)' }, // purple
+    { bg: 'rgba(233, 30, 99, 0.35)', border: 'rgba(233, 30, 99, 0.7)' },  // pink
+  ];
+
+  // Calculate image position and scale
+  const getImageDetails = useCallback(() => {
+    if (!imageRef.current || !containerRef.current) return null;
+
+    const img = imageRef.current;
+    const container = containerRef.current;
+    
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    
+    const imgWidth = imgRect.width;
+    const imgHeight = imgRect.height;
+    
+    const offsetX = imgRect.left - containerRect.left;
+    const offsetY = imgRect.top - containerRect.top;
+    
+    const scaleX = img.naturalWidth / imgWidth;
+    const scaleY = img.naturalHeight / imgHeight;
     
     return {
-      bg: colors.map(c => `${c.base}59`), // 35% opacity
-      border: colors.map(c => `${c.base}b3`) // 70% opacity
+      offsetX,
+      offsetY,
+      imgWidth,
+      imgHeight,
+      scaleX,
+      scaleY,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight
     };
   }, []);
-  
-  const { bg: bgColors, border: borderColors } = getRegionColors();
-  
-  // Generate cropped image from selection
-  const generateCroppedImage = useCallback((pixelCrop: Crop): string => {
-    if (!imgRef.current || 
-        typeof pixelCrop.x !== 'number' || 
-        typeof pixelCrop.y !== 'number' || 
-        typeof pixelCrop.width !== 'number' || 
-        typeof pixelCrop.height !== 'number' ||
-        pixelCrop.width === 0 ||
-        pixelCrop.height === 0) {
-          console.error('generateCroppedImage: Invalid pixelCrop provided', pixelCrop);
-          return '';
-        }
+
+  // Start selection
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (disabled || !containerRef.current || !imageRef.current) return;
     
-    // Create a higher quality canvas for better image fidelity
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const imgRect = imageRef.current.getBoundingClientRect();
+    
+    // Check if click is within the image
+    if (
+      e.clientX < imgRect.left ||
+      e.clientX > imgRect.right ||
+      e.clientY < imgRect.top ||
+      e.clientY > imgRect.bottom
+    ) {
+      return;
+    }
+    
+    setIsSelecting(true);
+    
+    const x = e.clientX - containerRect.left;
+    const y = e.clientY - containerRect.top;
+    
+    setSelectionStart({ x, y });
+    setSelectionCurrent({ x, y });
+  }, [disabled]);
+
+  // Update selection
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isSelecting || !containerRef.current) return;
+    
+    const containerRect = containerRef.current.getBoundingClientRect();
+    
+    const x = Math.max(0, Math.min(e.clientX - containerRect.left, containerRect.width));
+    const y = Math.max(0, Math.min(e.clientY - containerRect.top, containerRect.height));
+    
+    setSelectionCurrent({ x, y });
+  }, [isSelecting]);
+
+  // End selection
+  const handleMouseUp = useCallback(async () => {
+    if (!isSelecting) return;
+    
+    setIsSelecting(false);
+    
+    // Get selection dimensions
+    const details = getImageDetails();
+    if (!details) return;
+    
+    const { offsetX, offsetY, scaleX, scaleY, naturalWidth, naturalHeight } = details;
+    
+    // Calculate selection in container coordinates
+    const left = Math.min(selectionStart.x, selectionCurrent.x);
+    const top = Math.min(selectionStart.y, selectionCurrent.y);
+    const width = Math.abs(selectionCurrent.x - selectionStart.x);
+    const height = Math.abs(selectionCurrent.y - selectionStart.y);
+    
+    // Minimum size check
+    if (width < 10 || height < 10) return;
+    
+    // Convert to image coordinates
+    const imgLeft = (left - offsetX) * scaleX;
+    const imgTop = (top - offsetY) * scaleY;
+    const imgWidth = width * scaleX;
+    const imgHeight = height * scaleY;
+    
+    // Create canvas to extract the image region
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) return '';
+    canvas.width = imgWidth;
+    canvas.height = imgHeight;
     
-    // Set dimensions to match the crop
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !imageRef.current) return;
     
-    // Set quality settings for better image rendering
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    
-    // Draw the cropped portion of the image
+    // Draw the selected region to the canvas
     ctx.drawImage(
-      imgRef.current,
-      pixelCrop.x,
-      pixelCrop.y,
-      pixelCrop.width,
-      pixelCrop.height,
-      0,
-      0,
-      canvas.width,
-      canvas.height
+      imageRef.current,
+      imgLeft,                   // source x
+      imgTop,                    // source y
+      imgWidth,                  // source width
+      imgHeight,                 // source height
+      0,                         // destination x
+      0,                         // destination y
+      imgWidth,                  // destination width
+      imgHeight                  // destination height
     );
     
-    // Use higher quality (0.95) for JPEG conversion
-    return canvas.toDataURL('image/jpeg', 0.95);
-  }, []);
-  
-  // Function to add a new region based on a completed pixel crop (parameter type Crop)
-  const addRegion = useCallback((newPixelCrop: Crop) => {
-    // Add checks for undefined properties, although onComplete should provide them
-    if (!imgRef.current || 
-        typeof newPixelCrop.x !== 'number' || 
-        typeof newPixelCrop.y !== 'number' || 
-        typeof newPixelCrop.width !== 'number' || 
-        typeof newPixelCrop.height !== 'number' ||
-        newPixelCrop.width === 0 || 
-        newPixelCrop.height === 0) {
-          console.warn('addRegion: Received invalid or zero-dimension crop', newPixelCrop);
-          return; // Do not add region if crop is invalid
-        }
-
-    // Now TypeScript knows x, y, width, height are numbers here
-    const safePixelCrop = newPixelCrop as Required<Crop>; // Assert type after checks
-
-    const imageData = generateCroppedImage(safePixelCrop);
-    if (!imageData) return;
-
+    // Get the image data
+    const imageData = canvas.toDataURL('image/jpeg', 0.95);
+    
+    // Create new region
     const newRegion: Region = {
       id: uuidv4(),
       crop: {
-        x: safePixelCrop.x,
-        y: safePixelCrop.y,
-        width: safePixelCrop.width,
-        height: safePixelCrop.height,
-        originalWidth: imgRef.current.naturalWidth,
-        originalHeight: imgRef.current.naturalHeight
+        x: imgLeft,
+        y: imgTop,
+        width: imgWidth,
+        height: imgHeight,
+        originalWidth: naturalWidth,
+        originalHeight: naturalHeight
       },
       imageData
     };
-
-    setRegions(prevRegions => {
-      const updatedRegions = [...prevRegions, newRegion];
-      onRegionSelect(updatedRegions);
-      return updatedRegions;
+    
+    // Update local regions state only, don't call onRegionSelect yet
+    setRegions(prev => {
+      return [...prev, newRegion];
     });
+  }, [isSelecting, selectionStart, selectionCurrent, getImageDetails]);
 
-    // Reset the visual crop selection in ReactCrop to an empty state
-    setCrop({ unit: 'px', width: 0, height: 0, x: 0, y: 0 });
+  // Handle clicking outside
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (isSelecting && containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      setIsSelecting(false);
+    }
+  }, [isSelecting]);
 
-  }, [generateCroppedImage, onRegionSelect]);
-  
+  // Add document event listeners
+  useEffect(() => {
+    document.addEventListener('mouseup', handleClickOutside);
+    return () => {
+      document.removeEventListener('mouseup', handleClickOutside);
+    };
+  }, [handleClickOutside]);
+
   // Delete a region
   const deleteRegion = useCallback((id: string) => {
-    setRegions(prevRegions => {
-        const updatedRegions = prevRegions.filter(region => region.id !== id);
-        onRegionSelect(updatedRegions);
-        return updatedRegions;
+    setRegions(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      return updated;
     });
-  }, [onRegionSelect]);
-  
-  // Handle window resize
-  useEffect(() => {
-    if (!imgRef.current) return;
-    
-    const handleResize = () => {
-      // Force re-render when window is resized
-      setRegions(prev => [...prev]);
-    };
-    
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(imgRef.current);
-    
-    return () => {
-      if (imgRef.current) {
-        resizeObserver.unobserve(imgRef.current);
-      }
-      resizeObserver.disconnect();
-    };
   }, []);
-  
-  // Render regions overlay
-  const renderRegionsOverlay = useCallback(() => {
-    if (!imgRef.current || regions.length === 0) return null;
+
+  // Clear all regions
+  const clearRegions = useCallback(() => {
+    setRegions([]);
+  }, []);
+
+  // Get selection bounds
+  const getSelectionBounds = useCallback(() => {
+    const left = Math.min(selectionStart.x, selectionCurrent.x);
+    const top = Math.min(selectionStart.y, selectionCurrent.y);
+    const width = Math.abs(selectionCurrent.x - selectionStart.x);
+    const height = Math.abs(selectionCurrent.y - selectionStart.y);
     
-    const containerWidth = imgRef.current.width;
-    const containerHeight = imgRef.current.height;
+    return { left, top, width, height };
+  }, [selectionStart, selectionCurrent]);
+
+  // Get the next color for a new region
+  const getNextRegionColor = useCallback(() => {
+    const colorIndex = regions.length % colors.length;
+    return colors[colorIndex];
+  }, [regions, colors]);
+
+  // Convert image coordinates to container coordinates
+  const imageToContainerCoords = useCallback((x: number, y: number, width: number, height: number) => {
+    const details = getImageDetails();
+    if (!details) return { left: 0, top: 0, width: 0, height: 0 };
     
-    return (
-      <Box
-        className="region-overlay"
-        sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'none',
-          zIndex: 1
-        }}
-      >
-        {regions.map((region, index) => {
-          const colorIndex = index % bgColors.length;
-          
-          // Calculate display dimensions based on actual image size
-          const displayRatio = {
-            width: containerWidth / (region.crop.originalWidth || containerWidth),
-            height: containerHeight / (region.crop.originalHeight || containerHeight)
-          };
-          
-          return (
-            <Box
-              key={region.id}
-              sx={{
-                position: 'absolute',
-                top: region.crop.y * displayRatio.height,
-                left: region.crop.x * displayRatio.width,
-                width: region.crop.width * displayRatio.width,
-                height: region.crop.height * displayRatio.height,
-                backgroundColor: bgColors[colorIndex],
-                border: `2px solid ${borderColors[colorIndex]}`,
-                boxSizing: 'border-box',
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                pointerEvents: 'auto'
-              }}
-            >
-              <Typography 
-                sx={{ 
-                  color: 'white', 
-                  textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-                  fontWeight: 'bold',
-                  fontSize: '16px'
-                }}
-              >
-                {index + 1}
-              </Typography>
-              
-              <IconButton
-                size="small"
-                onClick={() => deleteRegion(region.id)}
-                sx={{
-                  position: 'absolute',
-                  top: -15,
-                  right: -15,
-                  backgroundColor: 'rgba(255,255,255,0.8)',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.9)'
-                  },
-                  zIndex: 2,
-                  pointerEvents: 'auto'
-                }}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Box>
-          );
-        })}
-      </Box>
-    );
-  }, [regions, bgColors, borderColors, deleteRegion]);
-  
+    const { offsetX, offsetY, scaleX, scaleY } = details;
+    
+    return {
+      left: offsetX + (x / scaleX),
+      top: offsetY + (y / scaleY),
+      width: width / scaleX,
+      height: height / scaleY
+    };
+  }, [getImageDetails]);
+
+  // If disabled, just show the image
   if (disabled) {
-    // If disabled, just render the image with regions overlay
     return (
       <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
         <img
-          ref={imgRef}
           src={imgSrc}
           alt="Region selector"
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          onLoad={() => setRegions(prev => [...prev])} // Force regions re-render
         />
-        {renderRegionsOverlay()}
+        {regions.length > 0 && (
+          <Box sx={{ position: 'absolute', top: 20, left: 20 }}>
+            <Typography variant="body2" sx={{ color: 'white', bgcolor: 'rgba(0,0,0,0.7)', p: 1, borderRadius: 1 }}>
+              {regions.length} region{regions.length !== 1 ? 's' : ''} selected
+            </Typography>
+          </Box>
+        )}
       </Box>
     );
   }
-  
+
   return (
     <Box 
       ref={containerRef}
       sx={{
         position: 'relative',
-        display: 'inline-block',
-        cursor: disabled ? 'not-allowed' : 'crosshair',
-        maxWidth: '100%',
-        lineHeight: 0,
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        cursor: isSelecting ? 'crosshair' : 'default',
+        bgcolor: '#000'
       }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
     >
-      <ReactCrop
-        src={imgSrc}
-        crop={crop}
-        onChange={(c) => setCrop(c)}
-        onComplete={(c) => {
-          if (c.width && c.height) {
-            setTimeout(() => addRegion(c), 0); 
-          }
+      {/* Control Buttons - Moved to top-right corner */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 16,
+          right: 80,
+          zIndex: 100,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          borderRadius: '8px',
+          padding: '8px',
+          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)'
         }}
-        disabled={disabled}
-        style={{ display: 'block' }}
+      >
+        {/* Save Button */}
+        <Button
+          variant="contained"
+          color="primary"
+          size="small"
+          onClick={() => {
+            if (regions.length > 0) {
+              onRegionSelect(regions);
+            } else {
+              alert('Please select at least one region before saving');
+            }
+          }}
+          disabled={regions.length === 0}
+          sx={{ 
+            fontWeight: 'bold',
+            fontSize: '0.8rem',
+            py: 0.5,
+            px: 1,
+            minWidth: 'auto',
+            '&:disabled': {
+              opacity: 0.6,
+              color: 'rgba(255, 255, 255, 0.8)'
+            }
+          }}
+        >
+          Save {regions.length} Region{regions.length !== 1 ? 's' : ''}
+        </Button>
+        
+        {/* Clear Button */}
+        {regions.length > 0 && (
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={clearRegions}
+            sx={{
+              fontSize: '0.8rem',
+              py: 0.5,
+              px: 1,
+              borderWidth: 1,
+              minWidth: 'auto',
+              '&:hover': {
+                borderWidth: 1,
+                backgroundColor: 'rgba(255, 255, 255, 0.1)'
+              }
+            }}
+          >
+            Clear All
+          </Button>
+        )}
+        
+        {/* Region Count */}
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            color: 'white', 
+            textAlign: 'center',
+            fontSize: '0.7rem',
+            opacity: 0.8
+          }}
+        >
+          {regions.length} region{regions.length !== 1 ? 's' : ''} selected
+        </Typography>
+      </Box>
+
+      {/* Image Container */}
+      <Box
+        sx={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
       >
         <img
-          ref={imgRef}
+          ref={imageRef}
           src={imgSrc}
-          alt="Selectable Region"
+          alt="Region selector source"
           style={{ 
-            opacity: disabled ? 0.6 : 1,
-            maxWidth: 'none',
-            maxHeight: 'none',
-            display: 'block',
-            userSelect: 'none',
+            maxWidth: '100%', 
+            maxHeight: '100%', 
+            objectFit: 'contain',
+            pointerEvents: 'none',
+            userSelect: 'none'
           }}
-          onLoad={(e) => { imgRef.current = e.currentTarget; }}
+          onLoad={() => setImageLoaded(true)}
         />
-      </ReactCrop>
-      
-      {renderRegionsOverlay()}
+      </Box>
+
+      {/* Current Selection */}
+      {isSelecting && (
+        <Box
+          ref={selectionRef}
+          sx={{
+            position: 'absolute',
+            ...getSelectionBounds(),
+            border: `2px dashed ${getNextRegionColor().border}`,
+            backgroundColor: getNextRegionColor().bg,
+            pointerEvents: 'none'
+          }}
+        />
+      )}
+
+      {/* Existing Regions */}
+      {imageLoaded && regions.map((region, index) => {
+        const colorIndex = index % colors.length;
+        const color = colors[colorIndex];
+        const coords = imageToContainerCoords(
+          region.crop.x,
+          region.crop.y,
+          region.crop.width,
+          region.crop.height
+        );
+        
+        return (
+          <Box
+            key={region.id}
+            sx={{
+              position: 'absolute',
+              ...coords,
+              backgroundColor: color.bg,
+              border: `2px solid ${color.border}`,
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Typography 
+              sx={{ 
+                color: 'white', 
+                textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                fontWeight: 'bold',
+                fontSize: '16px'
+              }}
+            >
+              {index + 1}
+            </Typography>
+            
+            <IconButton
+              size="small"
+              onClick={() => deleteRegion(region.id)}
+              sx={{
+                position: 'absolute',
+                top: -15,
+                right: -15,
+                backgroundColor: 'rgba(255,255,255,0.8)',
+                '&:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.9)'
+                },
+                zIndex: 2
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        );
+      })}
+
+      {/* Helper instruction */}
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 10,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '6px 12px',
+          borderRadius: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          color: 'white',
+          fontSize: '0.8rem'
+        }}
+      >
+        Click and drag to create regions
+      </Box>
     </Box>
   );
 };

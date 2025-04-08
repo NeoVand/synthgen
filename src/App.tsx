@@ -70,8 +70,10 @@ import ExportOptionsDialog, { ExportOptions } from './components/dialogs/ExportO
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
-// Import QAPair and other types from types/index.ts instead of defining them here
-import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry } from './types';
+// Import QAPair and other types from types/index.ts, removing conflicting ones
+import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, GenerationProgress } from './types';
+// Keep this import as is
+import { defaultTemplates, replacePlaceholders } from './config/promptTemplates';
 
 interface AppProps {
   onThemeChange: () => void;
@@ -137,8 +139,8 @@ const checkOllamaConnection = async (): Promise<boolean> => {
 const isTableView = (mode: ViewMode): boolean => mode === 'table';
 const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
 
-// Import the replacePlaceholders helper
-import { replacePlaceholders } from './config/promptTemplates';
+// Remove the redundant import
+// import { replacePlaceholders } from './config/promptTemplates';
 
 const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const theme = useTheme();
@@ -312,7 +314,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [generationType, setGenerationType] = useState<'summary' | 'qa' | 'question' | 'answer' | null>(null);
 
   // Add state for tracking generation progress
-  const [generationProgress, setGenerationProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress>({ completed: 0, total: 0 });
 
   // Add state for sidebar
   const [sidebarWidth, setSidebarWidth] = useState<number>(400);
@@ -897,7 +899,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                 }
                 
                 // Set scale and viewport - adjust scale as needed for quality vs file size
-                const scale = 1.5 // Higher value for better quality
+                const scale = 3 // Higher value for better quality (Increased from 1.5)
                 const viewport = page.getViewport({ scale })
                 
                 // Set canvas dimensions to match the page
@@ -913,7 +915,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                 await page.render(renderContext).promise
                 
                 // Convert canvas to data URL (image)
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.85) // Adjust quality as needed
+                // Changed to PNG for lossless quality, removed quality param (not applicable for PNG)
+                const dataUrl = canvas.toDataURL('image/png')
                 
                 // Store the rendered page image
                 pageImageDataList.push({ pageNum, dataUrl })
@@ -1159,7 +1162,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         const afterHtml = prompt.split('</div>').pop() || '';
         
         // Combine the text parts with a simple indicator
-        cleanPrompt = beforeHtml + 'I have provided an image for analysis.' + afterHtml;
+        cleanPrompt = `You are an expert at analyzing images and extracting information from them. 
+                       Please analyze the provided image and respond to the following: ${beforeHtml} ${afterHtml}`;
         
         console.log('[DEBUG-APP] Cleaned prompt:', cleanPrompt.substring(0, 200) + '...');
       }
@@ -1188,6 +1192,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         );
       } else if (containsImageHtml) {
         console.error('[DEBUG-APP] Image HTML detected but failed to extract base64 data');
+      } else {
+        // Log the request structure for text-only requests
+        console.log('[DEBUG-APP] Sending text-only request. Request structure:', 
+          JSON.stringify(requestBody, null, 2)
+        );
       }
       
       console.log('[DEBUG-APP] Sending request to Ollama API with model:', ollamaSettings.model);
@@ -1298,13 +1307,34 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     );
 
     try {
-      // Generate question using replacePlaceholders
-      const questionPrompt = replacePlaceholders(promptQuestion, {
+      // Determine if the context is an image
+      const isImageContext = row.context.includes('<div class="pdf-page-image">');
+      if (isImageContext) {
+        console.log('[DEBUG] Detected image context for question generation');
+      } else {
+        console.log('[DEBUG] Detected text context for question generation');
+      }
+      
+      // Select the appropriate prompt template
+      let currentQuestionPrompt = promptQuestion; // Default to selected/current template
+      if (isImageContext) {
+        const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
+        if (imageTemplate) {
+          currentQuestionPrompt = imageTemplate.questionPrompt;
+        }
+      }
+      
+      // Generate question using the selected prompt template
+      const processedPrompt = replacePlaceholders(currentQuestionPrompt, {
         summary: docSummary,
-        chunk: row.context
+        chunk: row.context // Note: chunk still contains the image HTML/base64 initially
       });
       
-      for await (const chunk of doStreamCall(questionPrompt)) {
+      // Log the processed prompt before calling doStreamCall
+      console.log('[DEBUG-APP] Processed Prompt (Question) before doStreamCall:', processedPrompt.substring(0, 300) + (processedPrompt.length > 300 ? '...' : ''));
+
+      // Call doStreamCall with the processed prompt (it handles image extraction internally)
+      for await (const chunk of doStreamCall(processedPrompt)) {
         if (shouldStopGeneration) break;
         questionText += chunk;
         debouncedUpdateQaPairs(row.id, { question: questionText });
@@ -1321,13 +1351,22 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         )
       );
 
-      return questionText;
+      return questionText; // Ensure return value
     } catch (err) {
       if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
         throw err;
       }
       console.error('Error generating question:', err);
-      return '';
+      // Final update on error
+      setQaPairs(prev =>
+        prev.map(r =>
+          r.id === row.id ? {
+            ...r,
+            generating: { question: false, answer: false }
+          } : r
+        )
+      );
+      return ''; // Return empty string on error
     }
   };
 
@@ -1347,14 +1386,35 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     );
 
     try {
-      // Generate answer using replacePlaceholders
-      const answerPrompt = replacePlaceholders(promptAnswer, {
+      // Determine if the context is an image
+      const isImageContext = row.context.includes('<div class="pdf-page-image">');
+      if (isImageContext) {
+        console.log('[DEBUG] Detected image context for answer generation');
+      } else {
+        console.log('[DEBUG] Detected text context for answer generation');
+      }
+      
+      // Select the appropriate prompt template
+      let currentAnswerPrompt = promptAnswer; // Default to selected/current template
+      if (isImageContext) {
+        const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
+        if (imageTemplate) {
+          currentAnswerPrompt = imageTemplate.answerPrompt;
+        }
+      }
+      
+      // Generate answer using the selected prompt template
+      const processedPrompt = replacePlaceholders(currentAnswerPrompt, {
         summary: docSummary,
-        chunk: row.context,
+        chunk: row.context, // Note: chunk still contains the image HTML/base64 initially
         question: row.question
       });
       
-      for await (const chunk of doStreamCall(answerPrompt)) {
+      // Log the processed prompt before calling doStreamCall
+      console.log('[DEBUG-APP] Processed Prompt (Answer) before doStreamCall:', processedPrompt.substring(0, 300) + (processedPrompt.length > 300 ? '...' : ''));
+
+      // Call doStreamCall with the processed prompt (it handles image extraction internally)
+      for await (const chunk of doStreamCall(processedPrompt)) {
         if (shouldStopGeneration) break;
         answerText += chunk;
         debouncedUpdateQaPairs(row.id, { answer: answerText });
@@ -1371,13 +1431,22 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         )
       );
 
-      return answerText;
+      return answerText; // Ensure return value
     } catch (err) {
-      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+     if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
         throw err;
       }
       console.error('Error generating answer:', err);
-      return '';
+      // Final update on error
+      setQaPairs(prev =>
+        prev.map(r =>
+          r.id === row.id ? {
+            ...r,
+            generating: { question: false, answer: false }
+          } : r
+        )
+      );
+      return ''; // Return empty string on error
     }
   };
 
@@ -1798,23 +1867,26 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const toggleCellExpansion = useCallback((rowId: string | number, columnType: string) => {
     setExpandedCells(prev => {
       const newState = { ...prev };
-      // Check if any cell in this row is expanded
-      const isAnyExpanded = ['context', 'question', 'answer'].some(
-        colType => prev[`${rowId}-${colType}`]
-      );
+      const cellKey = `${rowId}-${columnType}`;
+      const isCurrentlyExpanded = !!prev[cellKey];
 
-      if (isAnyExpanded) {
-        // If any cell is expanded, collapse all cells in the row
-        ['context', 'question', 'answer'].forEach(colType => {
-          delete newState[`${rowId}-${colType}`];
-        });
+      // Find the QA pair to check if it's an image context
+      const qaPair = qaPairs.find(qa => qa.id === rowId);
+      const isImageContextCell = qaPair?.context.includes('<div class="pdf-page-image">') && columnType === 'context';
+
+      if (isCurrentlyExpanded) {
+        // If currently expanded, collapse it, UNLESS it's an image cell
+        if (!isImageContextCell) {
+          delete newState[cellKey];
+        } 
+        // If it IS an image cell, leave it expanded (clicking opens viewer, doesn't collapse)
       } else {
-        // If no cell is expanded, expand the clicked cell
-        newState[`${rowId}-${columnType}`] = true;
+        // If currently collapsed, expand it
+        newState[cellKey] = true;
       }
       return newState;
     });
-  }, []);
+  }, [qaPairs]); // Add qaPairs dependency
 
 
   // Add this helper for auto-scrolling
@@ -3847,14 +3919,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                   generationProgress={generationProgress}
                   onPageChange={(newPage) => {
                     setPage(newPage);
-                    // Reset expanded cells when changing pages
-                    setExpandedCells({});
                   }}
                   onRowsPerPageChange={(newRowsPerPage) => {
                     setRowsPerPage(newRowsPerPage);
                     setPage(0);
-                    // Reset expanded cells when changing rows per page
-                    setExpandedCells({});
                   }}
                   onToggleCellExpansion={toggleCellExpansion}
                   onQAPairChange={setQaPairs}

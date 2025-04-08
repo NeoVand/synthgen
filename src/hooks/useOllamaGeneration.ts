@@ -66,9 +66,6 @@ export const useOllamaGeneration = () => {
       
       // Check if the prompt includes image HTML
       const containsImageHtml = prompt.includes('<div class="pdf-page-image">');
-      if (containsImageHtml) {
-        console.log('[DEBUG] Detected image HTML in prompt');
-      }
       
       // Extract image data and clean prompt if needed
       let imageBase64 = null;
@@ -83,10 +80,9 @@ export const useOllamaGeneration = () => {
         const beforeHtml = prompt.split('<div class="pdf-page-image">')[0];
         const afterHtml = prompt.split('</div>').pop() || '';
         
-        // Combine the text parts with a simple indicator
-        cleanPrompt = beforeHtml + 'I have provided an image for analysis.' + afterHtml;
-        
-        console.log('[DEBUG] Cleaned prompt:', cleanPrompt.substring(0, 200) + '...');
+        // Use a separate prompt for image processing
+        cleanPrompt = `You are an expert at analyzing images and extracting information from them. 
+                       Please analyze the provided image and respond to the following: ${beforeHtml} ${afterHtml}`;
       }
       
       // Prepare request body based on whether we have an image
