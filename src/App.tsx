@@ -235,6 +235,18 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [promptAnswer, setPromptAnswer] = useState<string>(
     "Based on the text (and summary) plus the question, provide a concise answer. Don't add any markdown or greetings. Only the Answer."
   )
+  
+  // Image Q&A prompts
+  const [imagePromptQuestion, setImagePromptQuestion] = useState<string>(() => {
+    // Initialize with the Image Analysis QA template from defaultTemplates
+    const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
+    return imageTemplate?.questionPrompt || '';
+  })
+  const [imagePromptAnswer, setImagePromptAnswer] = useState<string>(() => {
+    // Initialize with the Image Analysis QA template from defaultTemplates
+    const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
+    return imageTemplate?.answerPrompt || '';
+  })
 
   // Q&A table
   const [qaPairs, setQaPairs] = useState<QAPair[]>([])
@@ -1025,7 +1037,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         // Add each page image as a separate chunk at the beginning
         pageImageDataList.forEach(({ pageNum, dataUrl }) => {
           const imageChunk = `<div class="pdf-page-image">
-            <p> Potential Image(s) Found on Page  ${pageNum}</p>
             <img src="${dataUrl}" alt="PDF Page ${pageNum}" style="max-width: 100%; height: auto;" />
           </div>`;
           imageChunks.push(imageChunk);
@@ -1296,43 +1307,29 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   };
 
   // Add these new functions before the generateQA function
-  const generateQuestion = async (row: QAPair) => {
+  const generateQuestion = async (row: QAPair): Promise<string> => {
     let questionText = '';
 
     // Set initial generating state
     setQaPairs(prev =>
       prev.map(r =>
-        r.id === row.id ? { ...r, generating: { question: true, answer: false } } : r
+        r.id === row.id ? { ...r, generating: { question: true, answer: r.generating?.answer || false } } : r
       )
     );
 
     try {
       // Determine if the context is an image
       const isImageContext = row.context.includes('<div class="pdf-page-image">');
-      if (isImageContext) {
-        console.log('[DEBUG] Detected image context for question generation');
-      } else {
-        console.log('[DEBUG] Detected text context for question generation');
-      }
       
-      // Select the appropriate prompt template
-      let currentQuestionPrompt = promptQuestion; // Default to selected/current template
-      if (isImageContext) {
-        const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
-        if (imageTemplate) {
-          currentQuestionPrompt = imageTemplate.questionPrompt;
-        }
-      }
+      // Select the appropriate prompt template based on context type
+      const currentQuestionPrompt = isImageContext ? imagePromptQuestion : promptQuestion;
       
       // Generate question using the selected prompt template
       const processedPrompt = replacePlaceholders(currentQuestionPrompt, {
         summary: docSummary,
-        chunk: row.context // Note: chunk still contains the image HTML/base64 initially
+        chunk: row.context
       });
       
-      // Log the processed prompt before calling doStreamCall
-      console.log('[DEBUG-APP] Processed Prompt (Question) before doStreamCall:', processedPrompt.substring(0, 300) + (processedPrompt.length > 300 ? '...' : ''));
-
       // Call doStreamCall with the processed prompt (it handles image extraction internally)
       for await (const chunk of doStreamCall(processedPrompt)) {
         if (shouldStopGeneration) break;
@@ -1346,7 +1343,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           r.id === row.id ? {
             ...r,
             question: questionText,
-            generating: { question: false, answer: false }
+            generating: { question: false, answer: r.generating?.answer || false }
           } : r
         )
       );
@@ -1362,7 +1359,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         prev.map(r =>
           r.id === row.id ? {
             ...r,
-            generating: { question: false, answer: false }
+            generating: { question: false, answer: r.generating?.answer || false }
           } : r
         )
       );
@@ -1370,7 +1367,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     }
   };
 
-  const generateAnswer = async (row: QAPair) => {
+  const generateAnswer = async (row: QAPair): Promise<string> => {
     if (!row.question.trim()) {
       console.warn('Skipping answer generation - no question provided');
       return '';
@@ -1381,38 +1378,24 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     // Set generating state for answer
     setQaPairs(prev =>
       prev.map(r =>
-        r.id === row.id ? { ...r, generating: { question: false, answer: true } } : r
+        r.id === row.id ? { ...r, generating: { question: r.generating?.question || false, answer: true } } : r
       )
     );
 
     try {
       // Determine if the context is an image
       const isImageContext = row.context.includes('<div class="pdf-page-image">');
-      if (isImageContext) {
-        console.log('[DEBUG] Detected image context for answer generation');
-      } else {
-        console.log('[DEBUG] Detected text context for answer generation');
-      }
       
-      // Select the appropriate prompt template
-      let currentAnswerPrompt = promptAnswer; // Default to selected/current template
-      if (isImageContext) {
-        const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
-        if (imageTemplate) {
-          currentAnswerPrompt = imageTemplate.answerPrompt;
-        }
-      }
+      // Select the appropriate prompt template based on context type
+      const currentAnswerPrompt = isImageContext ? imagePromptAnswer : promptAnswer;
       
       // Generate answer using the selected prompt template
       const processedPrompt = replacePlaceholders(currentAnswerPrompt, {
         summary: docSummary,
-        chunk: row.context, // Note: chunk still contains the image HTML/base64 initially
+        chunk: row.context,
         question: row.question
       });
       
-      // Log the processed prompt before calling doStreamCall
-      console.log('[DEBUG-APP] Processed Prompt (Answer) before doStreamCall:', processedPrompt.substring(0, 300) + (processedPrompt.length > 300 ? '...' : ''));
-
       // Call doStreamCall with the processed prompt (it handles image extraction internally)
       for await (const chunk of doStreamCall(processedPrompt)) {
         if (shouldStopGeneration) break;
@@ -1426,7 +1409,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           r.id === row.id ? {
             ...r,
             answer: answerText,
-            generating: { question: false, answer: false }
+            generating: { question: r.generating?.question || false, answer: false }
           } : r
         )
       );
@@ -1442,7 +1425,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         prev.map(r =>
           r.id === row.id ? {
             ...r,
-            generating: { question: false, answer: false }
+            generating: { question: r.generating?.question || false, answer: false }
           } : r
         )
       );
@@ -1450,18 +1433,17 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     }
   };
 
-  // Modify the existing generateQA function to use the new abstracted functions
-  const generateQA = async (row: QAPair) => {
+  // Fix the generateQA function to properly handle error cases
+  const generateQA = async (row: QAPair): Promise<{ question: string, answer: string }> => {
     try {
-      const questionText = await generateQuestion(row);
-      if (shouldStopGeneration) return;
+      const question = await generateQuestion(row);
+      if (shouldStopGeneration || !question) return { question: '', answer: '' };
       
-      await generateAnswer({ ...row, question: questionText });
+      const answer = await generateAnswer({ ...row, question });
+      return { question, answer };
     } catch (err) {
-      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
-        throw err;
-      }
-      console.error('Error generating Q&A:', err);
+      console.error("Error generating QA pair:", err);
+      return { question: '', answer: '' };
     }
   };
 
@@ -2946,6 +2928,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                               }}
                               initialQuestionPrompt={promptQuestion}
                               initialAnswerPrompt={promptAnswer}
+                              isProcessingImages={processImages}
+                              onImagePromptChange={(questionPrompt, answerPrompt) => {
+                                setImagePromptQuestion(questionPrompt);
+                                setImagePromptAnswer(answerPrompt);
+                              }}
+                              initialImageQuestionPrompt={imagePromptQuestion}
+                              initialImageAnswerPrompt={imagePromptAnswer}
                             />
                           </Box>
                         )}

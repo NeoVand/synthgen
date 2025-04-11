@@ -199,7 +199,6 @@ const TableView: React.FC<TableViewProps> = ({
       // Create clean HTML content for the image region with better styling
       // Make sure we don't include any extra tags or styling that might confuse the model
       const imageHtml = `<div class="pdf-page-image">
-        <div class="page-number">Page ${viewerPageNumber} - Region ${index + 1}</div>
         <img 
           src="data:image/jpeg;base64,${base64Data}" 
           alt="Selected region from page ${viewerPageNumber}"
