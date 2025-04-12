@@ -24,7 +24,6 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import WarningIcon from '@mui/icons-material/Warning';
 import CloseIcon from '@mui/icons-material/Close';
-import EditIcon from '@mui/icons-material/Edit';
 import { PromptTemplate, defaultTemplates, createCustomTemplate } from '../config/promptTemplates';
 
 interface PromptTemplatesProps {

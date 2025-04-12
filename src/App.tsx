@@ -2079,8 +2079,45 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     setViewMode(newMode);
   };
 
-  const handleUpdateQA = (updatedQA: QAPair) => {
-    setQaPairs(prev => prev.map(qa => qa.id === updatedQA.id ? updatedQA : qa));
+  const handleUpdateQA = (updatedQA: QAPair | QAPair[]) => {
+    // Check if this is a single QA pair update
+    if (!Array.isArray(updatedQA)) {
+      setQaPairs(prev => prev.map(qa => qa.id === updatedQA.id ? updatedQA : qa));
+    } else {
+      // This is a bulk update from image cropping in FlashcardView
+      // Add new QA pairs and replace the existing one if needed
+      setQaPairs(prev => {
+        const newQAPairs = [...prev];
+        
+        // Find the QA pair to update (should be first in the array)
+        const firstQA = updatedQA[0];
+        const existingIndex = newQAPairs.findIndex(qa => qa.id === firstQA.id);
+        
+        if (existingIndex !== -1) {
+          // Replace the existing QA
+          newQAPairs[existingIndex] = firstQA;
+          
+          // Add the rest of the QA pairs after this one
+          if (updatedQA.length > 1) {
+            newQAPairs.splice(existingIndex + 1, 0, ...updatedQA.slice(1));
+          }
+        } else {
+          // If not found (shouldn't happen), just append all
+          newQAPairs.push(...updatedQA);
+        }
+        
+        return newQAPairs;
+      });
+      
+      // If we're in flashcard view, move to the first new card
+      if (isFlashcardView(viewMode) && updatedQA.length > 0) {
+        const firstNewQA = updatedQA[0];
+        const newIndex = qaPairs.findIndex(qa => qa.id === firstNewQA.id);
+        if (newIndex !== -1) {
+          setCurrentIndex(newIndex);
+        }
+      }
+    }
   };
 
   const handleSingleCardGenerate = async (cardId: string | number) => {

@@ -456,11 +456,15 @@ const TableView: React.FC<TableViewProps> = ({
                         sx={{ 
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
-                          padding: '12px 16px',
+                          padding: '8px 12px',
+                          width: '33%', // Equal width for all columns
                           minWidth: '200px',
-                          maxWidth: '400px',
+                          maxWidth: '33%', // Fixed max width for all columns
                           position: 'relative',
                           height: isAnyExpanded ? 'auto' : undefined,
+                          flex: '1 1 0px', // Equal flex to ensure columns grow evenly
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-word',
                           '&:hover': {
                             backgroundColor: theme.palette.mode === 'dark' 
                               ? 'rgba(255, 255, 255, 0.04)'
@@ -479,6 +483,8 @@ const TableView: React.FC<TableViewProps> = ({
                           overflow: isExpanded ? 'visible' : 'auto',
                           transition: 'all 0.2s ease',
                           height: isAnyExpanded ? (isExpanded ? 'auto' : '100%') : '4.5em',
+                          display: 'block',
+                          width: '100%',
                           '&::-webkit-scrollbar': {
                             width: '8px',
                             height: '8px',
@@ -505,35 +511,42 @@ const TableView: React.FC<TableViewProps> = ({
                           {isHtmlContent ? (
                             <Box 
                               sx={{ 
-                                width: '100%', 
+                                width: isHtmlContent ? 'max-content' : '100%', 
                                 fontSize: '0.875rem',
                                 lineHeight: 1.5,
-                                minHeight: isExpanded ? 'auto' : '4.5em',
+                                minHeight: isExpanded ? 'auto' : '2em',
+                                display: isHtmlContent ? 'inline-flex' : 'block',
+                                alignItems: 'center',
+                                wordBreak: 'break-word',
                                 // Ensure the container has enough space to show images
-                                maxHeight: isExpanded ? 'none' : '150px',
+                                maxHeight: isExpanded ? 'none' : '35px',
                                 '& img': {
                                   maxWidth: '100%',
                                   height: 'auto',
-                                  maxHeight: isExpanded ? 'none' : '120px',
-                                  borderRadius: '4px',
+                                  maxHeight: isExpanded ? '400px' : '35px', // Control image size by height
+                                  width: 'auto',
+                                  display: 'block',
+                                  margin: '0 auto',
+                                  borderRadius: '3px',
                                   boxShadow: theme.palette.mode === 'dark' 
-                                    ? '0 2px 8px rgba(0,0,0,0.5)' 
-                                    : '0 2px 8px rgba(0,0,0,0.15)',
-                                  cursor: 'zoom-in', // Add pointer cursor for images
+                                    ? '0 1px 4px rgba(0,0,0,0.5)' 
+                                    : '0 1px 4px rgba(0,0,0,0.15)',
+                                  cursor: 'zoom-in',
                                   transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                                   '&:hover': {
                                     transform: 'scale(1.02)',
                                     boxShadow: theme.palette.mode === 'dark' 
-                                      ? '0 4px 12px rgba(0,0,0,0.7)' 
-                                      : '0 4px 12px rgba(0,0,0,0.25)',
+                                      ? '0 2px 6px rgba(0,0,0,0.7)' 
+                                      : '0 2px 6px rgba(0,0,0,0.25)',
                                   }
                                 },
                                 // Highlight the pdf-page-image container
                                 '& .pdf-page-image': {
                                   border: `1px solid ${theme.palette.divider}`,
-                                  borderRadius: '6px',
-                                  padding: '8px',
-                                  marginBottom: '8px',
+                                  borderRadius: '4px',
+                                  padding: '4px',
+                                  margin: '2px 0',
+                                  width: '100%', // Full width container
                                   backgroundColor: theme.palette.mode === 'dark' 
                                     ? 'rgba(0, 0, 0, 0.2)' 
                                     : 'rgba(0, 0, 0, 0.03)',
