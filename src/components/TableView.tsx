@@ -269,12 +269,15 @@ const TableView: React.FC<TableViewProps> = ({
       }
     }}>
       <Table size="small" stickyHeader sx={{
+        tableLayout: 'fixed', // Force equal column widths
         '& .MuiTableCell-root': {
           borderBottom: '1px solid',
           borderColor: theme.palette.divider,
-          padding: '12px 16px',
+          padding: '8px 12px',
           fontSize: '0.875rem',
           transition: 'all 0.2s ease',
+          width: 'calc(100% / 3)', // Exactly one-third width
+          textAlign: 'left',
         },
         '& .MuiTableHead-root .MuiTableCell-root': {
           fontWeight: 600,
@@ -292,9 +295,9 @@ const TableView: React.FC<TableViewProps> = ({
           padding: '0 16px', // Adjust padding
           whiteSpace: 'nowrap',
         },
-        '& .MuiTableHead-root .MuiTableCell-root:first-of-type, & .MuiTableBody-root .MuiTableCell-root:first-of-type': {
+        '& .MuiTableHead-root .MuiTableCell-root:first-of-type': {
           width: '48px',
-          padding: '0 0 0 14px', // Add left padding to align with sidebar button
+          padding: '0 0 0 14px',
         },
         '& .MuiTableBody-root .MuiTableRow-root': {
           '&:hover': {
@@ -353,6 +356,7 @@ const TableView: React.FC<TableViewProps> = ({
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 1,
+                justifyContent: 'flex-start', // Left align header content
                 color: theme.palette.mode === 'dark'
                   ? theme.palette.primary.light
                   : theme.palette.primary.dark
@@ -373,6 +377,7 @@ const TableView: React.FC<TableViewProps> = ({
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 1,
+                justifyContent: 'flex-start', // Left align header content
                 color: theme.palette.mode === 'dark'
                   ? theme.palette.secondary.light
                   : theme.palette.secondary.dark
@@ -393,6 +398,7 @@ const TableView: React.FC<TableViewProps> = ({
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 1,
+                justifyContent: 'flex-start', // Left align header content
                 color: theme.palette.mode === 'dark'
                   ? theme.palette.success.light
                   : theme.palette.success.dark
@@ -457,14 +463,13 @@ const TableView: React.FC<TableViewProps> = ({
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
                           padding: '8px 12px',
-                          width: '33%', // Equal width for all columns
-                          minWidth: '200px',
-                          maxWidth: '33%', // Fixed max width for all columns
+                          width: '100%',
+                          height: '180px', // Increased from 120px
+                          maxHeight: '180px', // Increased from 120px
                           position: 'relative',
-                          height: isAnyExpanded ? 'auto' : undefined,
-                          flex: '1 1 0px', // Equal flex to ensure columns grow evenly
                           whiteSpace: 'normal',
                           wordBreak: 'break-word',
+                          overflow: 'hidden', // Changed from auto to hidden
                           '&:hover': {
                             backgroundColor: theme.palette.mode === 'dark' 
                               ? 'rgba(255, 255, 255, 0.04)'
@@ -479,10 +484,10 @@ const TableView: React.FC<TableViewProps> = ({
                       >
                         <Box sx={{ 
                           position: 'relative',
-                          maxHeight: isAnyExpanded ? (isExpanded ? 'none' : '100%') : '4.5em',
-                          overflow: isExpanded ? 'visible' : 'auto',
+                          height: '160px', // Adjusted for new row height
+                          maxHeight: '160px',
+                          overflow: 'hidden', // Prevent scrolling
                           transition: 'all 0.2s ease',
-                          height: isAnyExpanded ? (isExpanded ? 'auto' : '100%') : '4.5em',
                           display: 'block',
                           width: '100%',
                           '&::-webkit-scrollbar': {
@@ -514,44 +519,47 @@ const TableView: React.FC<TableViewProps> = ({
                                 width: isHtmlContent ? 'max-content' : '100%', 
                                 fontSize: '0.875rem',
                                 lineHeight: 1.5,
-                                minHeight: isExpanded ? 'auto' : '2em',
-                                display: isHtmlContent ? 'inline-flex' : 'block',
-                                alignItems: 'center',
-                                wordBreak: 'break-word',
-                                // Ensure the container has enough space to show images
-                                maxHeight: isExpanded ? 'none' : '35px',
+                                minHeight: '2em',
+                                display: 'block',
+                                height: '160px',
+                                maxHeight: '160px',
+                                overflow: 'hidden',
+                                textAlign: 'left',
                                 '& img': {
-                                  maxWidth: '100%',
-                                  height: 'auto',
-                                  maxHeight: isExpanded ? '400px' : '35px', // Control image size by height
-                                  width: 'auto',
+                                  width: '100%',
+                                  height: '100%', // Changed from fixed height
+                                  objectFit: 'contain',
                                   display: 'block',
-                                  margin: '0 auto',
+                                  margin: '0',
+                                  marginRight: 'auto',
                                   borderRadius: '3px',
                                   boxShadow: theme.palette.mode === 'dark' 
                                     ? '0 1px 4px rgba(0,0,0,0.5)' 
                                     : '0 1px 4px rgba(0,0,0,0.15)',
-                                  cursor: 'zoom-in',
-                                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                                  '&:hover': {
-                                    transform: 'scale(1.02)',
-                                    boxShadow: theme.palette.mode === 'dark' 
-                                      ? '0 2px 6px rgba(0,0,0,0.7)' 
-                                      : '0 2px 6px rgba(0,0,0,0.25)',
-                                  }
                                 },
-                                // Highlight the pdf-page-image container
                                 '& .pdf-page-image': {
                                   border: `1px solid ${theme.palette.divider}`,
                                   borderRadius: '4px',
                                   padding: '4px',
                                   margin: '2px 0',
-                                  width: '100%', // Full width container
+                                  width: '100%',
+                                  height: '100%', // Changed from fixed height
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'flex-start',
                                   backgroundColor: theme.palette.mode === 'dark' 
                                     ? 'rgba(0, 0, 0, 0.2)' 
                                     : 'rgba(0, 0, 0, 0.03)',
+                                  '& img': {
+                                    margin: '0',
+                                    marginRight: 'auto',
+                                    width: '100%',
+                                    height: '100%', // Changed from fixed height
+                                    objectFit: 'contain',
+                                    maxWidth: '100%',
+                                    maxHeight: '100%'
+                                  }
                                 },
-                                // Style the page number
                                 '& .page-number': {
                                   fontSize: '0.75rem',
                                   color: theme.palette.text.secondary,
@@ -566,26 +574,19 @@ const TableView: React.FC<TableViewProps> = ({
                               dangerouslySetInnerHTML={{ __html: content }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                // If user clicks directly on the image container and we have image info,
-                                // open the image viewer directly (enhances accessibility)
                                 if (imageInfo) {
                                   setViewerImageUrl(imageInfo.url);
                                   setViewerPageNumber(imageInfo.pageNumber);
                                   setImageViewerOpen(true);
-                                  // Also expand the cell to show the full image
                                   onToggleCellExpansion(qa.id, columnType);
                                 } else {
-                                  // If we don't have image info but this is an HTML cell,
-                                  // just expand the cell to make it easier to see
                                   onToggleCellExpansion(qa.id, columnType);
                                 }
                               }}
                               ref={(node: HTMLDivElement | null) => {
-                                // Store reference to the container element
                                 if (node && imageInfo) {
                                   imageRefs.current.set(imageRefKey, node);
                                 } else if (!node && imageInfo) {
-                                  // Cleanup when unmounting
                                   imageRefs.current.delete(imageRefKey);
                                 }
                               }}
