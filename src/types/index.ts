@@ -14,6 +14,22 @@ export interface QAPair {
   };
 }
 
+// Export options interface for the ExportOptionsDialog
+export interface ExportOptions {
+  format: 'csv' | 'jsonl';
+  columns: {
+    field: string;
+    originalName: string;
+    customName: string;
+    selected: boolean;
+  }[];
+  batchSize?: number;
+  shuffle?: boolean;
+  data?: QAPair[];
+  imageExportType?: 'description' | 'fullImage';
+  imageDescriptionPrompt?: string;
+}
+
 // Ollama settings types
 export interface OllamaSettings {
   model: string;

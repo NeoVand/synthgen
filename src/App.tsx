@@ -65,13 +65,13 @@ import { default as CustomAboutDialog } from './components/dialogs/AboutDialog' 
 import ImportConfirmationDialog from './components/dialogs/ImportConfirmationDialog'  // Import the ImportConfirmationDialog component
 import ChunkingConfirmationDialog from './components/dialogs/ChunkingConfirmationDialog'  // Import the ChunkingConfirmationDialog component
 import TableView from './components/TableView'  // Add this import
-import ExportOptionsDialog, { ExportOptions } from './components/dialogs/ExportOptionsDialog'
+import ExportOptionsDialog from './components/dialogs/ExportOptionsDialog'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
 // Import QAPair and other types from types/index.ts, removing conflicting ones
-import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, GenerationProgress } from './types';
+import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, GenerationProgress, ExportOptions } from './types';
 // Keep this import as is
 import { defaultTemplates, replacePlaceholders } from './config/promptTemplates';
 
@@ -1772,6 +1772,95 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     setShowExportDialog(true);
   }
   
+  // Add a new state for the default image description header
+  const defaultImageDescriptionHeader = `
+
+### GUIDELINES:
+- Output only the result of your task, no other text or comments (No "Here is the description of the image:" or anything like that) 
+
+### YOUR TASK:
+`;
+
+  const generateImageDescription = async (imageHtml: string, prompt: string): Promise<string> => {
+    try {
+      // Extract the base64 image data
+      const imageBase64 = extractBase64ImageFromHTML(imageHtml);
+      
+      if (!imageBase64) {
+        console.error('[DEBUG-APP] Failed to extract base64 data from image HTML');
+        return '[Failed to process image]';
+      }
+      
+      // Extract page number if available
+      const pageMatch = imageHtml.match(/Page (\d+)/);
+      const pageNumber = pageMatch ? pageMatch[1] : 'unknown';
+      
+      // Create a new AbortController if none exists
+      if (!abortControllerRef.current) {
+        abortControllerRef.current = new AbortController();
+      }
+      
+      // Combine the default header with the user's prompt
+      const fullPrompt = `${defaultImageDescriptionHeader}\n${prompt}`;
+      
+      // Prepare request body
+      const requestBody: any = {
+        model: ollamaSettings.model,
+        prompt: fullPrompt,
+        stream: false, // Use non-streaming for simplicity in this case
+        options: {
+          temperature: ollamaSettings.temperature,
+          top_p: ollamaSettings.topP,
+          seed: ollamaSettings.useFixedSeed ? ollamaSettings.seed : undefined,
+          num_ctx: ollamaSettings.numCtx,
+        },
+        images: [imageBase64]
+      };
+      
+      // Log the request details (without the full base64 image data for brevity)
+      console.log('[DEBUG-APP] Image description request details:');
+      console.log('[DEBUG-APP] Model:', ollamaSettings.model);
+      console.log('[DEBUG-APP] Page:', pageNumber);
+      console.log('[DEBUG-APP] Full prompt:', fullPrompt);
+      console.log('[DEBUG-APP] Temperature:', ollamaSettings.temperature);
+      console.log('[DEBUG-APP] Top P:', ollamaSettings.topP);
+      console.log('[DEBUG-APP] Seed:', ollamaSettings.useFixedSeed ? ollamaSettings.seed : 'not fixed');
+      console.log('[DEBUG-APP] Context window:', ollamaSettings.numCtx);
+      console.log('[DEBUG-APP] Image data length:', imageBase64.length);
+      console.log('[DEBUG-APP] Full request structure:', 
+        JSON.stringify({
+          ...requestBody,
+          images: ['[BASE64_DATA_LENGTH: ' + imageBase64.length + ']'] // Don't log the actual base64 data
+        }, null, 2)
+      );
+      
+      // Make the request to the Ollama API
+      console.log(`[DEBUG-APP] Sending image description request to ${OLLAMA_BASE_URL}/api/generate for Page ${pageNumber}`);
+      
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DEBUG-APP] Ollama API error:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('[DEBUG-APP] Received response for Page', pageNumber, ':', data.response?.substring(0, 100) + '...');
+      return data.response || `[Image description for Page ${pageNumber}]`;
+    } catch (error) {
+      console.error('Error generating image description:', error);
+      return '[Error generating image description]';
+    }
+  };
+
   const handleExportWithOptions = (options: ExportOptions) => {
     if (qaPairs.length === 0) {
       alert('No Q&A to export!')
@@ -1785,6 +1874,272 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     // If options.data exists (from MNRL filtering), use that instead of qaPairs
     let dataToExport = options.data ? [...options.data] : [...qaPairs];
     
+    // Process images in context if needed
+    const contextColumnSelected = selectedColumns.some(col => col.field === 'context');
+    if (contextColumnSelected && options.imageExportType) {
+      // Check if we need to handle images
+      const hasImages = dataToExport.some(qa => 
+        typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+      );
+
+      if (hasImages) {
+        if (options.imageExportType === 'description') {
+          // Check if the model is available
+          checkOllamaConnection().then(async (isConnected) => {
+            if (!isConnected) {
+              alert('Cannot connect to Ollama. Please check your connection and try again.');
+              return;
+            }
+            
+            // Reset the abort controller to ensure previous cancelled operations don't affect us
+            if (abortControllerRef.current) {
+              abortControllerRef.current = null;
+            }
+            
+            const prompt = options.imageDescriptionPrompt || 'Describe this image in 3-5 sentences. Focus on the main elements, their relationships, and any text visible in the image.';
+            
+            // Create a processing indicator
+            let processingText = document.createElement('div');
+            processingText.style.position = 'fixed';
+            processingText.style.top = '50%';
+            processingText.style.left = '50%';
+            processingText.style.transform = 'translate(-50%, -50%)';
+            processingText.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            processingText.style.color = 'white';
+            processingText.style.padding = '20px';
+            processingText.style.borderRadius = '10px';
+            processingText.style.zIndex = '9999';
+            processingText.style.textAlign = 'center';
+            
+            // Find all QA pairs with images
+            const qaWithImages = dataToExport.filter(qa => 
+              typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+            );
+            
+            // Add processing text to the document
+            document.body.appendChild(processingText);
+            
+            // Set up shouldStop flag
+            let shouldStop = false;
+            let wasCancelled = false;
+            
+            // Add a cancel button
+            let cancelButton = document.createElement('button');
+            cancelButton.innerText = 'Cancel';
+            cancelButton.style.marginTop = '10px';
+            cancelButton.style.padding = '5px 10px';
+            cancelButton.style.backgroundColor = '#e53935';
+            cancelButton.style.color = 'white';
+            cancelButton.style.border = 'none';
+            cancelButton.style.borderRadius = '4px';
+            cancelButton.style.cursor = 'pointer';
+            cancelButton.onclick = () => {
+              shouldStop = true;
+              wasCancelled = true;
+              if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                // Create a new abort controller for subsequent operations
+                abortControllerRef.current = new AbortController();
+              }
+              // Remove the processing indicator
+              try {
+                document.body.removeChild(processingText);
+              } catch (e) {
+                console.error('Error removing processing indicator:', e);
+              }
+            };
+            processingText.appendChild(document.createElement('br'));
+            processingText.appendChild(cancelButton);
+            
+            try {
+              // Process each image one by one
+              const processedData = [...dataToExport];
+              for (let i = 0; i < qaWithImages.length; i++) {
+                if (shouldStop) break;
+                
+                const qa = qaWithImages[i];
+                if (typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')) {
+                  // Update processing text
+                  processingText.innerHTML = `Processing image ${i + 1} of ${qaWithImages.length}...<br>`;
+                  processingText.appendChild(cancelButton);
+                  
+                  try {
+                    // Generate description for this image
+                    const description = await generateImageDescription(qa.context, prompt);
+                    
+                    // Update the QA pair with the description
+                    const qaIndex = processedData.findIndex(item => item.id === qa.id);
+                    if (qaIndex !== -1) {
+                      processedData[qaIndex] = {
+                        ...qa,
+                        context: description
+                      };
+                    }
+                  } catch (error) {
+                    // Check if this was caused by cancellation
+                    if (shouldStop) {
+                      console.log('Image processing was cancelled');
+                      break;
+                    }
+                    
+                    console.error('Error processing image:', error);
+                    // If there's an error, use a placeholder
+                    const pageMatch = qa.context.match(/Page (\d+)/);
+                    const pageNumber = pageMatch ? pageMatch[1] : 'unknown';
+                    
+                    const qaIndex = processedData.findIndex(item => item.id === qa.id);
+                    if (qaIndex !== -1) {
+                      processedData[qaIndex] = {
+                        ...qa,
+                        context: `[Image description failed for Page ${pageNumber}]`
+                      };
+                    }
+                  }
+                }
+              }
+              
+              // Check if the operation was cancelled
+              if (!wasCancelled) {
+                // Remove processing indicator
+                try {
+                  document.body.removeChild(processingText);
+                } catch (e) {
+                  console.error('Error removing processing indicator:', e);
+                }
+                
+                // Continue with export process
+                processExport(processedData, options, selectedColumns);
+              }
+            } catch (error) {
+              console.error('Error in image description generation:', error);
+              
+              // Remove processing indicator if still present
+              try {
+                document.body.removeChild(processingText);
+              } catch (e) {
+                console.error('Error removing processing indicator:', e);
+              }
+              
+              // Show error to user
+              alert('An error occurred while generating image descriptions. Please try again.');
+            }
+          }).catch(error => {
+            console.error('Error checking Ollama connection:', error);
+            alert('Error connecting to Ollama. Please check your connection and try again.');
+          });
+          
+          // Return early as we'll handle the export in the Promise chain
+          return;
+        } else if (options.imageExportType === 'fullImage') {
+          // Extract images for zip file
+          const images: { id: string; base64Data: string; fileName: string; pageNumber: string }[] = [];
+          let imageIndex = 1;
+          
+          // First pass: collect all images
+          dataToExport.forEach((qa, index) => {
+            if (typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')) {
+              // Extract the base64 data
+              const imgMatch = qa.context.match(/src="data:image\/([^;]+);base64,([^"]+)"/);
+              
+              if (imgMatch) {
+                const imageType = imgMatch[1]; // e.g., "jpeg", "png"
+                const base64Data = imgMatch[2];
+                
+                // Extract page number if available
+                const pageMatch = qa.context.match(/Page (\d+)/);
+                const pageNumber = pageMatch ? pageMatch[1] : index.toString();
+                
+                // Create a filename for the image
+                const fileName = `image_${imageIndex}_page_${pageNumber}.${imageType}`;
+                
+                // Add to the images array with a unique identifier
+                const id = `img_${qa.id}_${imageIndex}`;
+                images.push({
+                  id,
+                  base64Data,
+                  fileName,
+                  pageNumber
+                });
+                
+                // Store the reference to this image in the qa pair for easy lookup later
+                (qa as any).tempImageId = id;
+                
+                imageIndex++;
+              }
+            }
+          });
+          
+          // Check if we found any images
+          if (images.length > 0) {
+            // Import the necessary libraries
+            import('jszip').then(async ({ default: JSZip }) => {
+              // Create a new zip file
+              const zip = new JSZip();
+              
+              // Add each image to the zip
+              images.forEach(img => {
+                zip.file(img.fileName, img.base64Data, { base64: true });
+              });
+              
+              // Generate the zip file
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              
+              // Save the zip file
+              saveAs(zipBlob, 'images.zip');
+              
+              // Now second pass: replace images in the data with placeholders
+              dataToExport = dataToExport.map((qa) => {
+                if (typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')) {
+                  // Use the temporary image ID we stored earlier
+                  const imageId = (qa as any).tempImageId;
+                  
+                  if (imageId) {
+                    // Find the corresponding image in our images array
+                    const imageMatch = images.find(img => img.id === imageId);
+                    
+                    if (imageMatch) {
+                      // Replace with a reference to the image in the zip file
+                      return {
+                        ...qa,
+                        context: `[Image ${imageMatch.fileName} from zip file]`
+                      };
+                    }
+                  }
+                  
+                  // Fallback if we couldn't find the image
+                  return {
+                    ...qa,
+                    context: `[Image from Q&A pair ${qa.id}]`
+                  };
+                }
+                return qa;
+              });
+              
+              // Clean up temporary properties
+              dataToExport.forEach(qa => {
+                delete (qa as any).tempImageId;
+              });
+              
+              // Continue with the export process
+              processExport(dataToExport, options, selectedColumns);
+            }).catch(error => {
+              console.error('Error creating zip file:', error);
+              alert('Error creating zip file. Please try again or choose a different export option.');
+            });
+            
+            // Return early as we'll handle the export in the Promise chain
+            return;
+          }
+        }
+      }
+    }
+    
+    // If we're not handling images as a zip file, or there are no images, proceed with normal export
+    processExport(dataToExport, options, selectedColumns);
+  }
+  
+  // Helper function to process the actual export
+  const processExport = (dataToExport: QAPair[], options: ExportOptions, selectedColumns: any[]) => {
     // Shuffle the data if requested in advanced options
     if (options.shuffle) {
       // Fisher-Yates shuffle algorithm
