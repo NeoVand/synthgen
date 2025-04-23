@@ -98,8 +98,9 @@ const TableView: React.FC<TableViewProps> = ({
     // Simple regex to extract image source
     const imgSrcMatch = htmlContent.match(/src="([^"]+)"/);
     
-    // Try to match both formats: "PDF Page X" and "Page X Region"
-    const pageNumberMatch = htmlContent.match(/(?:PDF Page|Page) (\d+)/);
+    // Try to match both formats: "PDF Page X" and "Page X"
+    // Also support: "Page X (Region Y)" format for cropped regions
+    const pageNumberMatch = htmlContent.match(/(?:PDF Page|Page) (\d+)(?:\s*\(Region \d+\))?/);
     
     if (imgSrcMatch && pageNumberMatch) {
       return {
@@ -131,7 +132,8 @@ const TableView: React.FC<TableViewProps> = ({
         let pageNumber = 1;
         const pageNumberElement = img.closest('.pdf-page-image')?.querySelector('.page-number');
         if (pageNumberElement) {
-          const pageMatch = pageNumberElement.textContent?.match(/Page (\d+)/);
+          // Handle both formats: "Page X" and "Page X (Region Y)"
+          const pageMatch = pageNumberElement.textContent?.match(/Page (\d+)(?:\s*\(Region \d+\))?/);
           if (pageMatch) {
             pageNumber = parseInt(pageMatch[1], 10);
           }
@@ -169,7 +171,7 @@ const TableView: React.FC<TableViewProps> = ({
       .forEach(qa => {
         // Find all context cells with HTML content
         const contextContent = qa.context as string;
-        if (contextContent.includes('<div class="pdf-page-image">')) {
+        if (typeof contextContent === 'string' && contextContent.includes('<div class="pdf-page-image">')) {
           // Find the cell in the DOM
           const cellElement = document.querySelector(`[data-qa-id="${qa.id}"][data-column-type="context"]`);
           if (cellElement) {
@@ -199,10 +201,13 @@ const TableView: React.FC<TableViewProps> = ({
       // Create clean HTML content for the image region with better styling
       // Make sure we don't include any extra tags or styling that might confuse the model
       const imageHtml = `<div class="pdf-page-image">
+        <div class="page-number" style="display: none;">Page ${viewerPageNumber} (Region ${index + 1})</div>
         <img 
           src="data:image/jpeg;base64,${base64Data}" 
           alt="Selected region from page ${viewerPageNumber}"
           style="display: block; margin: 0 auto; max-width: 100%;"
+          data-page="${viewerPageNumber}" 
+          data-region="${index + 1}"
         />
       </div>`;
       
@@ -413,9 +418,9 @@ const TableView: React.FC<TableViewProps> = ({
           {qaPairs
             .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
             .map((qa, rowIndex) => {
-              const isAnyExpanded = ['context', 'question', 'answer'].some(
-                columnType => expandedCells[`${qa.id}-${columnType}`] || isCellGenerating(qa, columnType)
-              );
+              // const isAnyExpanded = ['context', 'question', 'answer'].some(
+              //   columnType => expandedCells[`${qa.id}-${columnType}`] || isCellGenerating(qa, columnType)
+              // );
 
               return (
                 <TableRow 
@@ -580,7 +585,29 @@ const TableView: React.FC<TableViewProps> = ({
                                   setImageViewerOpen(true);
                                   onToggleCellExpansion(qa.id, columnType);
                                 } else {
-                                  onToggleCellExpansion(qa.id, columnType);
+                                  // Try one more method to extract image information
+                                  // This helps with cropped regions that might not be detected by extractImageInfo
+                                  const img = (e.target as HTMLElement).closest('img');
+                                  if (img) {
+                                    const imageUrl = (img as HTMLImageElement).src;
+                                    let pageNumber = 1;
+                                    
+                                    // Try to find page number in a nearby .page-number element
+                                    const container = (e.target as HTMLElement).closest('.pdf-page-image');
+                                    const pageNumberEl = container?.querySelector('.page-number');
+                                    if (pageNumberEl) {
+                                      const pageMatch = pageNumberEl.textContent?.match(/Page (\d+)(?:\s*\(Region \d+\))?/);
+                                      if (pageMatch) {
+                                        pageNumber = parseInt(pageMatch[1], 10);
+                                      }
+                                    }
+                                    
+                                    setViewerImageUrl(imageUrl);
+                                    setViewerPageNumber(pageNumber);
+                                    setImageViewerOpen(true);
+                                  } else {
+                                    onToggleCellExpansion(qa.id, columnType);
+                                  }
                                 }
                               }}
                               ref={(node: HTMLDivElement | null) => {

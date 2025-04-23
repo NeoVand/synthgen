@@ -490,10 +490,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
           borderRadius: '12px',
           width: '500px',
           maxWidth: '90vw',
-          bgcolor: 'white',
-          '&:hover': {
-            bgcolor: 'white'
-          }
+          bgcolor: theme.palette.background.paper,
         }
       }}
     >
@@ -503,16 +500,14 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
         display: 'flex',
         alignItems: 'center',
         gap: 1,
-        bgcolor: 'white'
       }}>
         <DownloadIcon />
         Export Options
       </DialogTitle>
       <DialogContent sx={{ 
-        bgcolor: 'white',
         '& .MuiFormControlLabel-root': {
           '&:hover': {
-            bgcolor: 'white'
+            bgcolor: 'transparent'
           }
         },
         '& .MuiRadio-root': {
@@ -543,7 +538,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
         </Typography>
         
         {options.columns.map((column) => (
-          <Box key={column.field} sx={{ mb: 2, bgcolor: 'white' }}>
+          <Box key={column.field} sx={{ mb: 2 }}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={3}>
                 <FormControlLabel
@@ -561,9 +556,8 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   }
                   label={column.originalName}
                   sx={{
-                    bgcolor: 'white',
                     '&:hover': {
-                      bgcolor: 'white'
+                      bgcolor: 'transparent'
                     }
                   }}
                 />
@@ -578,12 +572,8 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   disabled={!column.selected}
                   sx={{
                     '& .MuiOutlinedInput-root': {
-                      bgcolor: 'white',
-                      '&:hover': {
-                        bgcolor: 'white'
-                      },
                       '&.Mui-focused': {
-                        bgcolor: 'white'
+                        bgcolor: 'transparent'
                       }
                     }
                   }}
@@ -599,7 +589,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
             mt: 3, 
             mb: 2, 
             ml: 2,
-            backgroundColor: 'white' // Ensure white background
           }}>
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
               Image Export Options
@@ -608,7 +597,9 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
               component="fieldset"
               sx={{
                 '& .MuiFormControlLabel-root': {
-                  backgroundColor: 'white'
+                  '&:hover': {
+                    bgcolor: 'transparent'
+                  }
                 },
                 '& .MuiRadio-root': {
                   backgroundColor: 'transparent',
@@ -625,17 +616,10 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                 name="image-export-type"
                 value={options.imageExportType}
                 onChange={handleImageExportTypeChange}
-                sx={{
-                  backgroundColor: 'white',
-                  '& .MuiFormControlLabel-root:hover': {
-                    backgroundColor: 'white'
-                  }
-                }}
               >
                 <Box sx={{ 
                   display: 'flex', 
                   alignItems: 'center',
-                  backgroundColor: 'white'
                 }}>
                   <FormControlLabel 
                     value="fullImage" 
@@ -652,21 +636,14 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                       />
                     } 
                     label="Export images as full images"
-                    sx={{
-                      backgroundColor: 'white',
-                      '&:hover': {
-                        backgroundColor: 'white'
-                      }
-                    }}
                   />
-                  <Tooltip title="When exporting, the full images will be exported in a separate zip file. This preserves the images but results in much larger file sizes.">
+                  <Tooltip title="When exporting, the full images will be exported along with the data file in a single zip. This preserves the images but results in larger file sizes.">
                     <Box 
                       component="span" 
                       sx={{ 
                         display: 'flex',
                         alignItems: 'center',
                         cursor: 'help',
-                        backgroundColor: 'white'
                       }}
                     >
                       <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
@@ -676,7 +653,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                 <Box sx={{ 
                   display: 'flex', 
                   alignItems: 'center',
-                  backgroundColor: 'white'
                 }}>
                   <FormControlLabel 
                     value="description" 
@@ -693,12 +669,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                       />
                     } 
                     label="Export images as descriptions"
-                    sx={{
-                      backgroundColor: 'white',
-                      '&:hover': {
-                        backgroundColor: 'white'
-                      }
-                    }}
                   />
                   <Tooltip title="When exporting, images will be replaced with a description. This option might take some time for the descriptions to be generated. This is ideal for text-based processing or when you want to reduce file size.">
                     <Box 
@@ -707,7 +677,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                         display: 'flex',
                         alignItems: 'center',
                         cursor: 'help',
-                        backgroundColor: 'white'
                       }}
                     >
                       <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
@@ -719,7 +688,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
 
             {/* Show prompt field only when description export type is selected */}
             {options.imageExportType === 'description' && (
-              <Box sx={{ mt: 2, ml: 4, mr: 2, backgroundColor: 'white' }}>
+              <Box sx={{ mt: 2, ml: 4, mr: 2 }}>
                 <Typography variant="caption" sx={{ mb: 0.5, display: 'block' }}>
                   Model prompt for generating image descriptions:
                 </Typography>
@@ -733,12 +702,8 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   size="small"
                   sx={{
                     '& .MuiOutlinedInput-root': {
-                      backgroundColor: 'white',
-                      '&:hover': {
-                        backgroundColor: 'white'
-                      },
                       '&.Mui-focused': {
-                        backgroundColor: 'white'
+                        bgcolor: 'transparent'
                       }
                     }
                   }}
@@ -758,9 +723,8 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
               alignItems: 'center', 
               cursor: 'pointer',
               mb: 1,
-              bgcolor: 'white',
               '&:hover': {
-                bgcolor: 'white'
+                bgcolor: 'transparent'
               }
             }}
             onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
@@ -776,7 +740,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   display: 'flex',
                   alignItems: 'center',
                   cursor: 'help',
-                  bgcolor: 'white'
                 }}
               >
                 <HelpOutlineIcon fontSize="small" />
@@ -786,9 +749,8 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
             <IconButton 
               size="small"
               sx={{
-                bgcolor: 'white',
                 '&:hover': {
-                  bgcolor: 'white'
+                  bgcolor: 'transparent'
                 }
               }}
             >
@@ -800,16 +762,15 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
             <Paper variant="outlined" sx={{ 
               p: 2, 
               mt: 1, 
-              bgcolor: 'white',
               '&:hover': {
-                bgcolor: 'white'
+                bgcolor: 'transparent'
               }
             }}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 These options are for configuring data prepared for fine-tuning models.
               </Typography>
               
-              <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', bgcolor: 'white' }}>
+              <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', '&:hover': { bgcolor: 'transparent' } }}>
                 <Button
                   variant="outlined"
                   startIcon={<ShuffleIcon />}
@@ -818,9 +779,8 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                     textTransform: 'none',
                     borderRadius: '4px',
                     mr: 1,
-                    bgcolor: 'white',
                     '&:hover': {
-                      bgcolor: 'white'
+                      bgcolor: 'transparent'
                     }
                   }}
                 >
@@ -833,7 +793,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                       display: 'flex',
                       alignItems: 'center',
                       cursor: 'help',
-                      bgcolor: 'white'
                     }}
                   >
                     <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
@@ -863,9 +822,8 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   borderColor: theme.palette.divider,
                   borderRadius: '4px',
                   overflow: 'hidden',
-                  bgcolor: 'white',
                   '&:hover': {
-                    bgcolor: 'white'
+                    bgcolor: 'transparent'
                   }
                 }}
               >
@@ -873,16 +831,15 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   expandIcon={<ExpandMore />}
                   sx={{ 
                     minHeight: '48px',
-                    bgcolor: 'white',
                     '&:hover': {
-                      bgcolor: 'white'
+                      bgcolor: 'transparent'
                     },
                     '& .MuiAccordionSummary-content': {
                       margin: '8px 0'
                     }
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'white' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', '&:hover': { bgcolor: 'transparent' } }}>
                     <TuneIcon sx={{ mr: 1, fontSize: '1.1rem' }} />
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                       MNRL Dataset Filtering
@@ -895,7 +852,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                           display: 'flex',
                           alignItems: 'center',
                           cursor: 'help',
-                          bgcolor: 'white'
                         }}
                       >
                         <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
@@ -906,13 +862,12 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                 <AccordionDetails sx={{ 
                   pt: 0, 
                   pb: 2,
-                  bgcolor: 'white',
                   '&:hover': {
-                    bgcolor: 'white'
+                    bgcolor: 'transparent'
                   }
                 }}>
-                  <Box sx={{ mb: 2, bgcolor: 'white' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5, bgcolor: 'white' }}>
+                  <Box sx={{ mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="body2">Training Batch Size</Typography>
                       <Tooltip title="Batch size determines how many examples are processed together during training. Smaller batch sizes require less memory but may result in noisier gradients.">
                         <Box 
@@ -922,7 +877,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                             display: 'flex',
                             alignItems: 'center',
                             cursor: 'help',
-                            bgcolor: 'white'
                           }}
                         >
                           <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
@@ -936,30 +890,17 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                       InputProps={{ 
                         inputProps: { min: 2 },
                         sx: {
-                          bgcolor: 'white',
-                          '&:hover': {
-                            bgcolor: 'white'
+                          '&.Mui-focused': {
+                            bgcolor: 'transparent'
                           }
                         }
                       }}
                       size="small"
-                      sx={{ 
-                        width: 120,
-                        '& .MuiOutlinedInput-root': {
-                          bgcolor: 'white',
-                          '&:hover': {
-                            bgcolor: 'white'
-                          },
-                          '&.Mui-focused': {
-                            bgcolor: 'white'
-                          }
-                        }
-                      }}
                     />
                   </Box>
                   
                   {/* Process button and status */}
-                  <Box sx={{ mt: 2, bgcolor: 'white' }}>
+                  <Box sx={{ mt: 2 }}>
                     <Button
                       variant="contained"
                       color="primary"
@@ -977,7 +918,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                     </Button>
                     
                     {isProcessing && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, bgcolor: 'white' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                         <Typography variant="caption" color="text.secondary">
                           Processing {processedCount} of {totalToProcess} pairs...
                         </Typography>
@@ -1013,7 +954,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
 
                   {/* Processing logs display */}
                   {processingLogs.length > 0 && (
-                    <Box sx={{ mt: 2, bgcolor: 'white' }}>
+                    <Box sx={{ mt: 2 }}>
                       <Typography variant="caption" sx={{ fontWeight: 500 }}>
                         Processing Logs:
                       </Typography>
@@ -1024,10 +965,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                           p: 1, 
                           maxHeight: '200px', 
                           overflow: 'auto',
-                          bgcolor: 'white',
-                          '&:hover': {
-                            bgcolor: 'white'
-                          }
                         }}
                       >
                         {processingLogs.map((log, index) => (
@@ -1041,7 +978,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                               mb: 0.5,
                               whiteSpace: 'pre-wrap',
                               wordBreak: 'break-word',
-                              bgcolor: 'white'
                             }}
                           >
                             {log}
@@ -1062,7 +998,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
         pt: 1,
         display: 'flex',
         gap: 1,
-        bgcolor: 'white',
         '& > button': {
           flex: '1 0 auto', // Make buttons take equal width
           minWidth: '120px', // Ensure minimum width
@@ -1075,9 +1010,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
             color: theme.palette.text.secondary,
             borderColor: theme.palette.text.secondary,
             border: '1px solid',
-            bgcolor: 'white',
             '&:hover': {
-              bgcolor: 'white',
               borderColor: theme.palette.text.primary,
             }
           }}

@@ -30,6 +30,13 @@ export interface ExportOptions {
   imageDescriptionPrompt?: string;
 }
 
+// Import options interface for the ImportOptionsDialog
+export interface ImportOptions {
+  importType: 'fileOnly' | 'fileAndImages';
+  file: File | null;
+  imageFolder: FileSystemDirectoryHandle | null;
+}
+
 // Ollama settings types
 export interface OllamaSettings {
   model: string;

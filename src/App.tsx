@@ -66,12 +66,13 @@ import ImportConfirmationDialog from './components/dialogs/ImportConfirmationDia
 import ChunkingConfirmationDialog from './components/dialogs/ChunkingConfirmationDialog'  // Import the ChunkingConfirmationDialog component
 import TableView from './components/TableView'  // Add this import
 import ExportOptionsDialog from './components/dialogs/ExportOptionsDialog'
+import ImportOptionsDialog from './components/dialogs/ImportOptionsDialog'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
 // Import QAPair and other types from types/index.ts, removing conflicting ones
-import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, GenerationProgress, ExportOptions } from './types';
+import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, GenerationProgress, ExportOptions, ImportOptions } from './types';
 // Keep this import as is
 import { defaultTemplates, replacePlaceholders } from './config/promptTemplates';
 
@@ -151,6 +152,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [isOllamaConnected, setIsOllamaConnected] = useState<boolean>(false);
   const [showAboutDialog, setShowAboutDialog] = useState<boolean>(false);
   const [showImportDialog, setShowImportDialog] = useState<boolean>(false);
+  const [showImportOptionsDialog, setShowImportOptionsDialog] = useState<boolean>(false);
   const [showExportDialog, setShowExportDialog] = useState<boolean>(false);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [showChunkingDialog, setShowChunkingDialog] = useState<boolean>(false);
@@ -259,7 +261,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Add state for CSV columns
   const [csvColumns, setCsvColumns] = useState<{name: string; selected: boolean}[]>([])
-  const [csvData, setCsvData] = useState<string[][]>([])
+  // Remove the unused state declaration
+  // const [csvData, setCsvData] = useState<string[][]>([])
 
   // Add state for JSONL keys
   const [jsonlKeys, setJsonlKeys] = useState<{
@@ -405,7 +408,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       if (ext === 'pdf') {
         // Store the file data for later use
         const arrayBuffer = await file.arrayBuffer()
-        setOriginalFileData(arrayBuffer)
+        // Create a new copy of the buffer to prevent detached buffer issues
+        const bufferCopy = arrayBuffer.slice(0);
+        setOriginalFileData(bufferCopy)
         textContent = await parsePdfFile(file)
       } else if (ext === 'docx') {
         textContent = await parseDocxFile(file)
@@ -425,11 +430,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         // Set initial column selection state (all selected by default)
         setCsvColumns(columnNames.map(name => ({ name, selected: true })))
         
-        // Store the raw data for later processing
-        const rows = textContent.split('\n').map(row => 
+        // Process the data but don't store in a variable since it's not used
+        textContent.split('\n').map(row => 
           row.split(delimiter).map(cell => cell.trim().replace(/^["']|["']$/g, ''))
         )
-        setCsvData(rows)
         
         // Set chunking algorithm to CSV/TSV
         setChunkingAlgorithm('csv-tsv')
@@ -766,14 +770,40 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         }
       };
 
+      // Extract existing image chunks if present
+      const existingImageChunks: string[] = [];
+      if (qaPairs.length > 0) {
+        qaPairs.forEach(pair => {
+          if (pair.context.includes('<div class="pdf-page-image">')) {
+            existingImageChunks.push(pair.context);
+          }
+        });
+      }
+
       // Create a variable to store page image data
       let pageImageDataList: { pageNum: number; dataUrl: string }[] = [];
       
       // If it's a PDF and processImages is enabled, extract images first
       if (fileName?.toLowerCase().endsWith('.pdf') && processImages && originalFileData) {
         try {
-          // Initialize PDF.js 
-          const pdfDoc = await getDocument({ data: originalFileData }).promise
+          // Create a copy of the ArrayBuffer to prevent issues with detached buffers
+          // This happens when the buffer is transferred or becomes detached after operations
+          let bufferData: ArrayBuffer;
+          try {
+            // Try to create a new view - this will fail if the buffer is detached
+            new Uint8Array(originalFileData);
+            // If we get here, the buffer is not detached, we can use it directly
+            bufferData = originalFileData;
+          } catch (e) {
+            // Buffer is detached, need to reload the file
+            console.warn("Original file buffer was detached, prompting user to re-upload file");
+            alert("Please re-upload your PDF file to process images. The original data is no longer available.");
+            setProcessImages(false);
+            return;
+          }
+          
+          // Initialize PDF.js with our buffer
+          const pdfDoc = await getDocument({ data: bufferData }).promise
           let totalImages = 0
           let totalVectorGraphics = 0
           let totalFormXObjects = 0
@@ -965,9 +995,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         }
       }
       
-      // Process text chunks (regardless of whether we processed images)
+      // Process text chunks
       let chunks: string[] = [];
       
+      // Different chunking algorithm based on selection
       switch (chunkingAlgorithm) {
         case 'recursive':
           const splitter = new RecursiveCharacterTextSplitter({
@@ -1003,18 +1034,69 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           break;
           
         case 'csv-tsv':
-          chunks = csvData.slice(1).map(row => {
-            return csvColumns
-              .filter(col => col.selected)
-              .map(col => {
-                const colIndex = csvData[0].indexOf(col.name);
-                return colIndex >= 0 ? row[colIndex] : '';
-              })
-              .join(' ');
-          }).filter(text => text.trim());
+          // Parse the CSV/TSV text using the existing parseCSV function in this file
+          const csvData: string[][] = [];
+          if (rawText.trim()) {
+            // We'll reuse the existing parseCSV function that's defined later in this file
+            // to avoid errors with 'parseCSV' not being found in scope
+            const lines = rawText.split('\n').map(line => line.trim()).filter(Boolean);
+            for (const line of lines) {
+              const row: string[] = [];
+              let current = '';
+              let inQuotes = false;
+              
+              for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                const nextChar = line[i + 1];
+                
+                if (char === '"' && !inQuotes) {
+                  inQuotes = true;
+                  continue;
+                }
+                
+                if (char === '"' && inQuotes) {
+                  if (nextChar === '"') {
+                    current += '"';
+                    i++; // Skip the next quote
+                  } else {
+                    inQuotes = false;
+                  }
+                  continue;
+                }
+                
+                if ((char === ',' || char === '\t') && !inQuotes) {
+                  row.push(current);
+                  current = '';
+                  continue;
+                }
+                
+                current += char;
+              }
+              
+              // Add the last column
+              row.push(current);
+              csvData.push(row);
+            }
+          }
+          
+          const hasHeaders = csvData.length > 0 && csvData[0].length > 0;
+          
+          if (hasHeaders && csvColumns.length > 0) {
+            // Start from row 1 to skip headers
+            chunks = csvData.slice(1).map((row: any) => {
+              return csvColumns
+                .filter(col => col.selected)
+                .map(col => {
+                  const colIndex = csvData[0].indexOf(col.name);
+                  return colIndex >= 0 ? row[colIndex] : '';
+                })
+                .join(' ');
+            }).filter((text: string) => text.trim());
+          }
           break;
           
         case 'jsonl':
+          // Process JSONL data
           chunks = jsonlData.map(obj => {
             return jsonlKeys
               .filter(key => key.selected)
@@ -1027,7 +1109,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           break;
       }
       
-      // If we have rendered page images from PDF processing, add them to the chunks
+      // Create combined chunks array based on conditions
+      let combinedChunks: string[] = [];
+      
+      // Add newly processed images if available
       if (fileName?.toLowerCase().endsWith('.pdf') && processImages && pageImageDataList.length > 0) {
         const imageChunks: string[] = [];
         
@@ -1043,37 +1128,39 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         });
         
         // Prepend image chunks to the text chunks
-        chunks = [...imageChunks, ...chunks];
+        combinedChunks = [...imageChunks, ...chunks];
+      } else {
+        // If not processing images in this run, still include text chunks
+        combinedChunks = chunks;
       }
 
       // If no existing Q&A pairs, proceed with creating new pairs
-      const pairs: QAPair[] = chunks.map((ck, idx) => ({
-        id: idx + 1,
-        context: ck,
-        question: '',
-        answer: '',
-        selected: false,
-        generating: {
-          question: false,
-          answer: false
-        }
-      }))
-      setQaPairs(pairs)
-      
-      // Auto-expand cells with images
-      const newExpandedCells: Record<string, boolean> = { ...expandedCells };
-      pairs.forEach((pair) => {
-        if (pair.context.includes('<div class="pdf-page-image">')) {
-          newExpandedCells[`${pair.id}-context`] = true;
-        }
-      });
-      setExpandedCells(newExpandedCells);
-      
-      // If there are existing Q&A pairs, show the confirmation dialog
-      if (qaPairs.length > 0) {
-        setPendingChunks(chunks);
+      if (qaPairs.length === 0) {
+        const pairs: QAPair[] = combinedChunks.map((ck, idx) => ({
+          id: idx + 1,
+          context: ck,
+          question: '',
+          answer: '',
+          selected: false,
+          generating: {
+            question: false,
+            answer: false
+          }
+        }));
+        setQaPairs(pairs);
+        
+        // Auto-expand cells with images
+        const newExpandedCells: Record<string, boolean> = { ...expandedCells };
+        pairs.forEach((pair) => {
+          if (pair.context.includes('<div class="pdf-page-image">')) {
+            newExpandedCells[`${pair.id}-context`] = true;
+          }
+        });
+        setExpandedCells(newExpandedCells);
+      } else {
+        // Store the existing image chunks with the new text chunks for the dialog
+        setPendingChunks(combinedChunks);
         setShowChunkingDialog(true);
-        return;
       }
     } catch (err) {
       console.error('Error chunking doc:', err)
@@ -1878,7 +1965,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     const contextColumnSelected = selectedColumns.some(col => col.field === 'context');
     if (contextColumnSelected && options.imageExportType) {
       // Check if we need to handle images
-      const hasImages = dataToExport.some(qa => 
+      const hasImages = dataToExport.some((qa: QAPair) => 
         typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
       );
 
@@ -1912,7 +1999,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
             processingText.style.textAlign = 'center';
             
             // Find all QA pairs with images
-            const qaWithImages = dataToExport.filter(qa => 
+            const qaWithImages = dataToExport.filter((qa: QAPair) => 
               typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
             );
             
@@ -2076,16 +2163,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
               // Create a new zip file
               const zip = new JSZip();
               
-              // Add each image to the zip
+              // Create an 'images' folder in the zip
+              const imagesFolder = zip.folder('images');
+              
+              // Add each image to the 'images' folder in the zip
               images.forEach(img => {
-                zip.file(img.fileName, img.base64Data, { base64: true });
+                imagesFolder?.file(img.fileName, img.base64Data, { base64: true });
               });
-              
-              // Generate the zip file
-              const zipBlob = await zip.generateAsync({ type: 'blob' });
-              
-              // Save the zip file
-              saveAs(zipBlob, 'images.zip');
               
               // Now second pass: replace images in the data with placeholders
               dataToExport = dataToExport.map((qa) => {
@@ -2101,7 +2185,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                       // Replace with a reference to the image in the zip file
                       return {
                         ...qa,
-                        context: `[Image ${imageMatch.fileName} from zip file]`
+                        context: `[Image images/${imageMatch.fileName} from zip file]`
                       };
                     }
                   }
@@ -2120,8 +2204,49 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                 delete (qa as any).tempImageId;
               });
               
-              // Continue with the export process
-              processExport(dataToExport, options, selectedColumns);
+              // Generate data file content (CSV or JSONL)
+              let fileName = '';
+              let fileContent = '';
+              
+              if (options.format === 'csv') {
+                // Generate CSV header with custom column names
+                fileContent = selectedColumns.map(col => col.customName).join(',') + '\n';
+                
+                // Generate CSV data
+                dataToExport.forEach((qa) => {
+                  const rowValues = selectedColumns.map(col => {
+                    const value = qa[col.field as keyof typeof qa] || '';
+                    // Escape quotes for CSV format
+                    return `"${String(value).replace(/"/g, '""')}"`;
+                  });
+                  fileContent += rowValues.join(',') + '\n';
+                });
+                
+                fileName = 'qa_dataset.csv';
+              } else {
+                // JSONL format
+                dataToExport.forEach((qa) => {
+                  const jsonObject: Record<string, any> = {};
+                  
+                  // Use custom names as keys
+                  selectedColumns.forEach(col => {
+                    jsonObject[col.customName] = qa[col.field as keyof typeof qa] || '';
+                  });
+                  
+                  fileContent += JSON.stringify(jsonObject) + '\n';
+                });
+                
+                fileName = 'qa_dataset.jsonl';
+              }
+              
+              // Add the data file to the root of the zip
+              zip.file(fileName, fileContent);
+              
+              // Generate the zip file
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              
+              // Save the zip file
+              saveAs(zipBlob, 'qa_dataset_with_images.zip');
             }).catch(error => {
               console.error('Error creating zip file:', error);
               alert('Error creating zip file. Please try again or choose a different export option.');
@@ -2257,7 +2382,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   const [registry] = useState(getSectionRegistry);
   const [instanceId] = useState(() => Symbol('instance-id'));
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reorderSection = useCallback(
     ({
@@ -2793,6 +2917,362 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       }
     }
   };
+
+  // Add a new function to handle the import options
+  const handleImportWithOptions = async (options: ImportOptions) => {
+    if (options.importType === 'fileOnly') {
+      // Use the existing function for single file import
+      if (options.file) {
+        handleImportCSV(options.file);
+      }
+    } else if (options.importType === 'fileAndImages') {
+      // We need to handle both the file and the image folder
+      if (!options.file) {
+        alert('Please select a file to import.');
+        return;
+      }
+      
+      if (!options.imageFolder) {
+        alert('Please select an image folder.');
+        return;
+      }
+      
+      try {
+        // Read and parse the data file
+        const text = await options.file.text();
+        
+        // Determine if it's CSV or JSON
+        const isJSON = options.file.name.toLowerCase().endsWith('.json') || 
+                       options.file.name.toLowerCase().endsWith('.jsonl');
+        
+        let qaPairsData: QAPair[] = [];
+        
+        if (isJSON) {
+          // Handle JSON/JSONL format
+          if (options.file.name.toLowerCase().endsWith('.jsonl')) {
+            // JSONL: one JSON object per line
+            const lines = text.split('\n').filter(line => line.trim());
+            qaPairsData = lines.map((line, idx) => {
+              const obj = JSON.parse(line);
+              return {
+                id: idx + 1,
+                context: obj.context || '',
+                question: obj.question || '',
+                answer: obj.answer || '',
+                selected: false,
+                generating: {
+                  question: false,
+                  answer: false
+                }
+              };
+            });
+          } else {
+            // Regular JSON
+            const jsonData = JSON.parse(text);
+            qaPairsData = Array.isArray(jsonData) ? jsonData.map((obj, idx) => ({
+              id: idx + 1,
+              context: obj.context || '',
+              question: obj.question || '',
+              answer: obj.answer || '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            })) : [];
+          }
+        } else {
+          // Define an internal parseCSV function if it doesn't already exist in the scope
+          // This ensures we have a parseCSV function regardless of the surrounding code
+          const parseCSVInternal = (text: string): string[][] => {
+            const rows: string[][] = [];
+            let currentRow: string[] = [];
+            let currentField = '';
+            let insideQuotes = false;
+            
+            for (let i = 0; i < text.length; i++) {
+              const char = text[i];
+              const nextChar = text[i + 1];
+              
+              if (char === '"') {
+                if (insideQuotes && nextChar === '"') {
+                  currentField += '"';
+                  i++; // Skip next quote
+                } else {
+                  insideQuotes = !insideQuotes;
+                }
+              } else if (char === ',' && !insideQuotes) {
+                currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+                currentField = '';
+              } else if ((char === '\n' || char === '\r\n' || char === '\r') && !insideQuotes) {
+                currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+                if (currentRow.some(field => field.length > 0)) {
+                  rows.push([...currentRow]); // Create a new array to avoid reference issues
+                }
+                currentRow = [];
+                currentField = '';
+              } else {
+                currentField += char;
+              }
+            }
+            
+            // Handle the last row if there's no final newline
+            if (currentField || currentRow.length > 0) {
+              currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+              if (currentRow.some(field => field.length > 0)) {
+                rows.push([...currentRow]); // Create a new array to avoid reference issues
+              }
+            }
+            
+            return rows;
+          };
+
+          // Use our internal parseCSV function
+          const rows = parseCSVInternal(text);
+          
+          // Validate CSV format
+          if (rows.length < 2) {
+            throw new Error('CSV must have at least a header row and one data row');
+          }
+          
+          const headers = rows[0].map((h: string) => h.toLowerCase().trim());
+          
+          if (!headers.includes('context') || !headers.includes('question') || !headers.includes('answer')) {
+            throw new Error('CSV must have "context", "question", and "answer" columns');
+          }
+          
+          const contextIndex = headers.indexOf('context');
+          const questionIndex = headers.indexOf('question');
+          const answerIndex = headers.indexOf('answer');
+          
+          // Convert rows to QAPairs
+          qaPairsData = rows.slice(1).map((row: string[], idx: number) => ({
+            id: idx + 1,
+            context: row[contextIndex] || '',
+            question: row[questionIndex] || '',
+            answer: row[answerIndex] || '',
+            selected: false,
+            generating: {
+              question: false,
+              answer: false
+            }
+          }));
+        }
+        
+        // Process image placeholders
+        const processedQAPairs = await processImagePlaceholders(qaPairsData, options.imageFolder);
+        
+        // Check if any of the processed QA pairs contain image data
+        const hasImages = processedQAPairs.some((qa: QAPair) => 
+          typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+        );
+        
+        // If images are found, set the processImages flag to true
+        if (hasImages) {
+          setProcessImages(true);
+        }
+        
+        // Replace or append the data
+        if (qaPairs.length > 0) {
+          // Show confirmation dialog
+          setPendingImportFile(options.file);
+          setShowImportDialog(true);
+          
+          // Store the processed data for later use when the user confirms
+          (options.file as any).processedQAPairs = processedQAPairs;
+        } else {
+          // No existing data, just set the processed data
+          setQaPairs(processedQAPairs);
+        }
+        
+      } catch (err) {
+        alert(`Error importing data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        console.error('Import error:', err);
+      }
+    }
+  };
+
+  // Add a new function to process image placeholders
+  const processImagePlaceholders = async (data: QAPair[], folderHandle: FileSystemDirectoryHandle): Promise<QAPair[]> => {
+    // Process each QA pair to look for image placeholders
+    const processedData = [...data];
+    
+    for (let i = 0; i < processedData.length; i++) {
+      const pair = processedData[i];
+      
+      // Check if the context contains an image placeholder
+      const imagePlaceholderRegex = /\[Image\s+([^\]]+)\s+from\s+zip\s+file\]/g;
+      
+      if (typeof pair.context === 'string' && pair.context.match(imagePlaceholderRegex)) {
+        // Replace all image placeholders
+        pair.context = await replaceImagePlaceholders(pair.context, folderHandle);
+      }
+    }
+    
+    return processedData;
+  };
+
+  // Function to replace image placeholders with actual images
+  const replaceImagePlaceholders = async (text: string, folderHandle: FileSystemDirectoryHandle): Promise<string> => {
+    const imagePlaceholderRegex = /\[Image\s+([^\]]+)\s+from\s+zip\s+file\]/g;
+    let result = text;
+    const matches = Array.from(text.matchAll(imagePlaceholderRegex));
+    
+    for (const match of matches) {
+      const placeholder = match[0];
+      const imagePath = match[1].trim();
+      
+      try {
+        // Extract just the filename from the path
+        const pathParts = imagePath.split('/');
+        const fileName = pathParts[pathParts.length - 1];
+        
+        // Try to get the file from the folder
+        let imageFile: File | null = null;
+        
+        try {
+          // First try with the exact path
+          const fileHandle = await getFileFromPath(folderHandle, imagePath);
+          if (fileHandle) {
+            imageFile = await fileHandle.getFile();
+          }
+        } catch (e) {
+          console.log(`Couldn't find exact path ${imagePath}, trying with filename only`);
+        }
+        
+        // If not found with exact path, try just the filename
+        if (!imageFile) {
+          try {
+            // Directly try to get the file by name
+            const fileHandle = await folderHandle.getFileHandle(fileName);
+            if (fileHandle) {
+              imageFile = await fileHandle.getFile();
+            }
+          } catch (e) {
+            console.error(`Error getting file ${fileName}:`, e);
+          }
+        }
+        
+        if (imageFile) {
+          // Read the image file and convert to base64
+          const arrayBuffer = await imageFile.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce(
+              (data, byte) => data + String.fromCharCode(byte),
+              ''
+            )
+          );
+          
+          // Create the image HTML without the Page label
+          const mimeType = imageFile.type || 'image/png';
+          const imageHtml = `<div class="pdf-page-image">
+            <img src="data:${mimeType};base64,${base64}" alt="${fileName}" style="max-width: 100%;">
+          </div>`;
+          
+          // Replace the placeholder with the image HTML
+          result = result.replace(placeholder, imageHtml);
+          
+          // Remove the code that adds to extractedImages
+        } else {
+          console.warn(`Image file not found: ${imagePath}`);
+        }
+      } catch (error) {
+        console.error(`Error processing image ${imagePath}:`, error);
+      }
+    }
+    
+    return result;
+  };
+
+  // Helper function to get a file from a path inside a directory handle
+  const getFileFromPath = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<FileSystemFileHandle | null> => {
+    const parts = path.split('/').filter(part => part.length > 0);
+    let currentHandle: FileSystemDirectoryHandle = rootHandle;
+    
+    // Navigate through directories
+    for (let i = 0; i < parts.length - 1; i++) {
+      try {
+        const nextHandle = await currentHandle.getDirectoryHandle(parts[i]);
+        currentHandle = nextHandle;
+      } catch (e) {
+        console.warn(`Directory not found: ${parts[i]}`);
+        return null;
+      }
+    }
+    
+    // Get the file
+    try {
+      return await currentHandle.getFileHandle(parts[parts.length - 1]);
+    } catch (e) {
+      console.warn(`File not found: ${parts[parts.length - 1]}`);
+      return null;
+    }
+  };
+
+  // Update the ImportConfirmationDialog handlers to work with processed QA pairs
+  <ImportConfirmationDialog 
+    open={showImportDialog}
+    onClose={() => {
+      setShowImportDialog(false);
+      setPendingImportFile(null);
+    }}
+    onExport={handleExportCSV}
+    onReplace={(file: File | null) => {
+      // First process the file, then close dialog
+      if (file) {
+        // Check if we have already processed data
+        if ((file as any).processedQAPairs) {
+          const processedData = (file as any).processedQAPairs;
+          
+          // Check if any of the processed QA pairs contain image data
+          const hasImages = processedData.some((qa: QAPair) => 
+            typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+          );
+          
+          // If images are found, set the processImages flag to true
+          if (hasImages) {
+            setProcessImages(true);
+          }
+          
+          setQaPairs(processedData);
+        } else {
+          // Use the existing handler
+          handleImportCSV(file, 'replace', true);
+        }
+      }
+      // Close dialog after processing
+      setShowImportDialog(false);
+      setPendingImportFile(null);
+    }}
+    onAppend={(file: File | null) => {
+      // First process the file, then close dialog
+      if (file) {
+        // Check if we have already processed data
+        if ((file as any).processedQAPairs) {
+          const processedData = (file as any).processedQAPairs;
+          
+          // Check if any of the processed QA pairs contain image data
+          const hasImages = processedData.some((qa: QAPair) => 
+            typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+          );
+          
+          // If images are found, set the processImages flag to true
+          if (hasImages) {
+            setProcessImages(true);
+          }
+          
+          setQaPairs(prev => [...prev, ...processedData]);
+        } else {
+          // Use the existing handler
+          handleImportCSV(file, 'append', true);
+        }
+      }
+      // Close dialog after processing
+      setShowImportDialog(false);
+      setPendingImportFile(null);
+    }}
+    pendingImportFile={pendingImportFile}
+  />
   //------------------------------------------------------------------------------------
   //  Render UI
   //------------------------------------------------------------------------------------
@@ -3106,38 +3586,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                               Accepts .txt, .csv, .pdf, .docx, .md, .jsonl, .json
                             </Typography>
                             
-                            {/* Add Process Images checkbox at the bottom of the document upload section */}
-                            {fileName && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                                <FormControlLabel
-                                  control={
-                                    <Checkbox
-                                      checked={processImages}
-                                      onChange={(e) => setProcessImages(e.target.checked)}
-                                      sx={{
-                                        '&.Mui-checked': {
-                                          color: theme.palette.primary.main,
-                                        }
-                                      }}
-                                    />
-                                  }
-                                  label={
-                                    <Typography sx={{ 
-                                      fontSize: '0.875rem',
-                                      fontWeight: 500,
-                                      color: theme.palette.text.secondary
-                                    }}>
-                                      Process Images
-                                    </Typography>
-                                  }
-                                />
-                                <Tooltip title="Extract images from your document. The tool will identify and process as many images as possible, though some might be missed. Pages containing images will be fully extracted, allowing you to select specific regions to keep. You may need to remove some extra content after extraction." placement="right">
-                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
-                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            )}
+                            {/* Process Images checkbox has been moved to the chunking section */}
                           </Box>
                         )}
                         {section.id === 'section-modelSettings' && (
@@ -3480,6 +3929,39 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                                     }
                                   }}
                                 />
+                              </Box>
+                            )}
+
+                            {/* Process Images checkbox moved to chunking section */}
+                            {fileName && fileName.toLowerCase().endsWith('.pdf') && (
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      checked={processImages}
+                                      onChange={(e) => setProcessImages(e.target.checked)}
+                                      sx={{
+                                        '&.Mui-checked': {
+                                          color: theme.palette.primary.main,
+                                        }
+                                      }}
+                                    />
+                                  }
+                                  label={
+                                    <Typography sx={{ 
+                                      fontSize: '0.875rem',
+                                      fontWeight: 500,
+                                      color: theme.palette.text.secondary
+                                    }}>
+                                      Process Images
+                                    </Typography>
+                                  }
+                                />
+                                <Tooltip title="Extract images from your document. The tool will identify and process as many images as possible, though some might be missed. Pages containing images will be fully extracted, allowing you to select specific regions to keep. You may need to remove some extra content after extraction." placement="right">
+                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                  </IconButton>
+                                </Tooltip>
                               </Box>
                             )}
 
@@ -4201,7 +4683,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         size="small"
                         variant="text"
                         onClick={() => {
-                          fileInputRef.current?.click();
+                          // Show import options dialog instead of directly opening file picker
+                          setShowImportOptionsDialog(true);
                         }}
                         startIcon={<UploadIcon />}
                         sx={{
@@ -4221,13 +4704,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         }}
                       >
                         Import
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".csv"
-                          style={{ display: 'none' }}
-                          onChange={handleImportCSV}
-                        />
                       </Button>
                     </Tooltip>
                     <Tooltip title="Export all Q&A pairs with custom format options (CSV or JSONL)">
@@ -4371,10 +4847,25 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         onReplace={(file: File | null) => {
           // First process the file, then close dialog
           if (file) {
-            // Use a copy to ensure we don't lose the file reference
-            const fileCopy = file;
-            // Pass true for fromDialog parameter to prevent showing dialog again
-            handleImportCSV(fileCopy, 'replace', true);
+            // Check if we have already processed data
+            if ((file as any).processedQAPairs) {
+              const processedData = (file as any).processedQAPairs;
+              
+              // Check if any of the processed QA pairs contain image data
+              const hasImages = processedData.some((qa: QAPair) => 
+                typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+              );
+              
+              // If images are found, set the processImages flag to true
+              if (hasImages) {
+                setProcessImages(true);
+              }
+              
+              setQaPairs(processedData);
+            } else {
+              // Use the existing handler
+              handleImportCSV(file, 'replace', true);
+            }
           }
           // Close dialog after processing
           setShowImportDialog(false);
@@ -4383,10 +4874,25 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         onAppend={(file: File | null) => {
           // First process the file, then close dialog
           if (file) {
-            // Use a copy to ensure we don't lose the file reference
-            const fileCopy = file;
-            // Pass true for fromDialog parameter to prevent showing dialog again
-            handleImportCSV(fileCopy, 'append', true);
+            // Check if we have already processed data
+            if ((file as any).processedQAPairs) {
+              const processedData = (file as any).processedQAPairs;
+              
+              // Check if any of the processed QA pairs contain image data
+              const hasImages = processedData.some((qa: QAPair) => 
+                typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+              );
+              
+              // If images are found, set the processImages flag to true
+              if (hasImages) {
+                setProcessImages(true);
+              }
+              
+              setQaPairs(prev => [...prev, ...processedData]);
+            } else {
+              // Use the existing handler
+              handleImportCSV(file, 'append', true);
+            }
           }
           // Close dialog after processing
           setShowImportDialog(false);
@@ -4413,6 +4919,14 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
               answer: false
             }
           }));
+          
+          // If originalFileData exists but we're replacing everything without processing images,
+          // we should create a backup and keep it in state
+          if (originalFileData && !processImages) {
+            // We're preserving the buffer but not processing images immediately
+            console.log("Preserving PDF buffer for potential future image processing");
+          }
+          
           setQaPairs(newPairs);
           
           // Auto-expand cells with images
@@ -4428,30 +4942,87 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           setPendingChunks([]);
         }}
         onAppend={(chunks: string[]) => {
-          // Append new chunks to existing ones
-          const lastId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id)));
-          const newPairs = chunks.map((chunk, idx) => ({
-            id: lastId + idx + 1,
-            context: chunk,
-            question: '',
-            answer: '',
-            selected: false,
-            generating: {
-              question: false,
-              answer: false
-            }
-          }));
-          setQaPairs(prev => [...prev, ...newPairs]);
+          // Extract new text chunks (non-image chunks)
+          const newTextChunks = chunks.filter(chunk => !chunk.includes('<div class="pdf-page-image">'));
+          
+          // Note: We identify existing image chunks but don't need to store them in a variable
+          // qaPairs.filter(qa => qa.context.includes('<div class="pdf-page-image">'));
+          
+          // If processImages is enabled and there are new image chunks in the pending chunks,
+          // use those instead of the existing ones
+          const newImageChunks = processImages 
+            ? chunks.filter(chunk => chunk.includes('<div class="pdf-page-image">'))
+            : [];
+          
+          // For append mode, either:
+          // 1. If processImages is enabled, we need to remove all existing image chunks and use the new ones
+          // 2. If processImages is disabled, we need to keep the existing image chunks and only append new text chunks
+          if (processImages && newImageChunks.length > 0) {
+            // Remove existing image QA pairs
+            const nonImageQaPairs = qaPairs.filter(qa => !qa.context.includes('<div class="pdf-page-image">'));
+            
+            // Create new QA pairs for the image chunks
+            const lastId = nonImageQaPairs.length > 0 
+              ? Math.max(...nonImageQaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : qa.id))
+              : 0;
+              
+            const newImagePairs = newImageChunks.map((chunk, idx) => ({
+              id: lastId + idx + 1,
+              context: chunk,
+              question: '',
+              answer: '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            }));
+            
+            // Create new QA pairs for the text chunks
+            const newTextPairs = newTextChunks.map((chunk, idx) => ({
+              id: lastId + newImageChunks.length + idx + 1,
+              context: chunk,
+              question: '',
+              answer: '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            }));
+            
+            // Combine everything: existing non-image QA pairs, new image QA pairs, new text QA pairs
+            setQaPairs([...nonImageQaPairs, ...newImagePairs, ...newTextPairs]);
+          } else {
+            // When not processing images, just append the new text chunks
+            const lastId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id)));
+            
+            const newTextPairs = newTextChunks.map((chunk, idx) => ({
+              id: lastId + idx + 1,
+              context: chunk,
+              question: '',
+              answer: '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            }));
+            
+            setQaPairs(prev => [...prev, ...newTextPairs]);
+          }
           
           // Auto-expand cells with images
           const newExpandedCells: Record<string, boolean> = { ...expandedCells };
-          newPairs.forEach((pair) => {
+          
+          // Always make sure image cells are expanded
+          qaPairs.forEach((pair) => {
             if (pair.context.includes('<div class="pdf-page-image">')) {
               newExpandedCells[`${pair.id}-context`] = true;
             }
           });
-          setExpandedCells(newExpandedCells);
           
+          setExpandedCells(newExpandedCells);
           setShowChunkingDialog(false);
           setPendingChunks([]);
         }}
@@ -4548,6 +5119,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       <Box sx={{ mt: 4 }}>
         {/* Add your existing content here */}
       </Box>
+      <ImportOptionsDialog
+        open={showImportOptionsDialog}
+        onClose={() => setShowImportOptionsDialog(false)}
+        onImport={handleImportWithOptions}
+      />
     </Box>
   );
 };
