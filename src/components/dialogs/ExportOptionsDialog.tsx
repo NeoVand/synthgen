@@ -26,7 +26,9 @@ import {
   AccordionSummary,
   AccordionDetails,
   CircularProgress,
-  Alert
+  Alert,
+  RadioGroup,
+  Radio
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import CloseIcon from '@mui/icons-material/Close';
@@ -35,6 +37,7 @@ import { ExpandLess, ExpandMore } from '@mui/icons-material';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import TuneIcon from '@mui/icons-material/Tune';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { QAPair, ExportOptions } from '../../types';
 
 export interface ColumnConfig {
   field: string;
@@ -43,20 +46,12 @@ export interface ColumnConfig {
   selected: boolean;
 }
 
-export interface ExportOptions {
-  format: 'csv' | 'jsonl';
-  columns: ColumnConfig[];
-  batchSize?: number;
-  shuffle?: boolean;
-  data?: Array<{id: number, question: string, answer: string, context: string}>;
-}
-
 interface ExportOptionsDialogProps {
   open: boolean;
   onClose: () => void;
   onExport: (options: ExportOptions) => void;
   onShuffle?: () => void;
-  qaPairs: Array<{id: number, question: string, answer: string, context: string}>;
+  qaPairs: QAPair[];
   ollamaSettings?: {
     model: string;
     temperature: number;
@@ -83,7 +78,9 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
       { field: 'context', originalName: 'context', customName: 'context', selected: true },
       { field: 'question', originalName: 'question', customName: 'question', selected: true },
       { field: 'answer', originalName: 'answer', customName: 'answer', selected: true }
-    ]
+    ],
+    imageExportType: 'description',
+    imageDescriptionPrompt: 'Describe this image in 3-5 sentences. Focus on the main elements, their relationships, and any text visible in the image.'
   });
 
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
@@ -106,6 +103,21 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
   // Add a new state for detailed logs
   const [processingLogs, setProcessingLogs] = useState<string[]>([]);
 
+  // State to track if images are present in the data
+  const [hasImages, setHasImages] = useState(false);
+
+  // Check if images are present in the dataset
+  useEffect(() => {
+    if (qaPairs.length > 0) {
+      const imagesPresent = qaPairs.some(qa => 
+        typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+      );
+      setHasImages(imagesPresent);
+    } else {
+      setHasImages(false);
+    }
+  }, [qaPairs]);
+
   // Reset options when dialog opens
   useEffect(() => {
     if (open) {
@@ -115,7 +127,9 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
           { field: 'context', originalName: 'context', customName: 'context', selected: true },
           { field: 'question', originalName: 'question', customName: 'question', selected: true },
           { field: 'answer', originalName: 'answer', customName: 'answer', selected: true }
-        ]
+        ],
+        imageExportType: 'description',
+        imageDescriptionPrompt: 'Describe this image in 3-5 sentences. Focus on the main elements, their relationships, and any text visible in the image.'
       });
       setShowAdvancedOptions(false);
       setBatchSize(4);
@@ -148,6 +162,20 @@ const ExportOptionsDialog: React.FC<ExportOptionsDialogProps> = ({
       columns: options.columns.map(col => 
         col.field === field ? { ...col, customName: newName } : col
       )
+    });
+  };
+
+  const handleImageExportTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setOptions({
+      ...options,
+      imageExportType: event.target.value as 'description' | 'fullImage'
+    });
+  };
+
+  const handleImageDescriptionPromptChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setOptions({
+      ...options,
+      imageDescriptionPrompt: event.target.value
     });
   };
 
@@ -404,8 +432,9 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
         throw new Error(`Failed to parse valid IDs from model response: ${responseText}`);
       }
       
-      // Return only the pairs with valid IDs
-      return batch.filter(pair => validIds.includes(pair.id));
+      // Store valid IDs as strings
+      const validIdsAsString = validIds.map(id => String(id));
+      return batch.filter(pair => validIdsAsString.includes(String(pair.id)));
     } catch (error) {
       console.error("Error calling Ollama:", error);
       throw error;
@@ -413,9 +442,9 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
   };
 
   const handleExport = () => {
-    // Only proceed if at least one column is selected
+    // Check if at least one column is selected
     if (options.columns.some(col => col.selected)) {
-      // If we have filtered pairs from MNRL processing, use those instead
+      // If we have filtered pairs from MNRL validation, use those
       const dataToExport = filteredPairs.length > 0 ? filteredPairs : undefined;
       
       onExport({
@@ -424,7 +453,11 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
         batchSize: showAdvancedOptions ? batchSize : undefined,
         shuffle: showAdvancedOptions ? shuffleData : undefined,
         // Pass the filtered data if available
-        ...(dataToExport && { data: dataToExport })
+        ...(dataToExport && { data: dataToExport }),
+        // Pass the image export type
+        imageExportType: options.imageExportType,
+        // Pass the image description prompt if set
+        imageDescriptionPrompt: options.imageDescriptionPrompt
       });
       onClose();
     } else {
@@ -432,10 +465,12 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
     }
   };
 
+  // Check if context column is selected
+  const isContextSelected = options.columns.find(col => col.field === 'context')?.selected || false;
+
   // Update this function to check if at least two columns are selected
   const canProcessMNRL = () => {
     // Count how many columns are selected
-
     const selectedColumnCount = options.columns.filter(col => col.selected).length;
     // Need at least two columns for MNRL (anchor and positive)
     return selectedColumnCount == 2;
@@ -455,7 +490,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
           borderRadius: '12px',
           width: '500px',
           maxWidth: '90vw',
-          bgcolor: theme.palette.mode === 'dark' ? '#1D1F21' : '#FFFFFF',
+          bgcolor: theme.palette.background.paper,
         }
       }}
     >
@@ -464,12 +499,23 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
         color: theme.palette.primary.main,
         display: 'flex',
         alignItems: 'center',
-        gap: 1
+        gap: 1,
       }}>
         <DownloadIcon />
         Export Options
       </DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ 
+        '& .MuiFormControlLabel-root': {
+          '&:hover': {
+            bgcolor: 'transparent'
+          }
+        },
+        '& .MuiRadio-root': {
+          '&:hover': {
+            bgcolor: 'transparent'
+          }
+        }
+      }}>
         <DialogContentText sx={{ color: 'text.secondary', mb: 2 }}>
           Customize your export format and select which columns to include.
         </DialogContentText>
@@ -500,9 +546,20 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                     <Checkbox
                       checked={column.selected}
                       onChange={(e) => handleColumnSelection(column.field, e.target.checked)}
+                      sx={{
+                        bgcolor: 'transparent',
+                        '&:hover': {
+                          bgcolor: 'transparent'
+                        }
+                      }}
                     />
                   }
                   label={column.originalName}
+                  sx={{
+                    '&:hover': {
+                      bgcolor: 'transparent'
+                    }
+                  }}
                 />
               </Grid>
               <Grid item xs={9}>
@@ -513,11 +570,151 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   fullWidth
                   size="small"
                   disabled={!column.selected}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '&.Mui-focused': {
+                        bgcolor: 'transparent'
+                      }
+                    }
+                  }}
                 />
               </Grid>
             </Grid>
           </Box>
         ))}
+
+        {/* Image export options - only visible when context is selected and there are images */}
+        {hasImages && isContextSelected && (
+          <Box sx={{ 
+            mt: 3, 
+            mb: 2, 
+            ml: 2,
+          }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              Image Export Options
+            </Typography>
+            <FormControl 
+              component="fieldset"
+              sx={{
+                '& .MuiFormControlLabel-root': {
+                  '&:hover': {
+                    bgcolor: 'transparent'
+                  }
+                },
+                '& .MuiRadio-root': {
+                  backgroundColor: 'transparent',
+                  '&:hover': {
+                    backgroundColor: 'transparent'
+                  },
+                  '&.Mui-checked': {
+                    backgroundColor: 'transparent'
+                  }
+                }
+              }}
+            >
+              <RadioGroup
+                name="image-export-type"
+                value={options.imageExportType}
+                onChange={handleImageExportTypeChange}
+              >
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                }}>
+                  <FormControlLabel 
+                    value="fullImage" 
+                    control={
+                      <Radio 
+                        sx={{
+                          '&:hover': {
+                            backgroundColor: 'transparent'
+                          },
+                          '&.Mui-checked': {
+                            backgroundColor: 'transparent'
+                          }
+                        }}
+                      />
+                    } 
+                    label="Export images as full images"
+                  />
+                  <Tooltip title="When exporting, the full images will be exported along with the data file in a single zip. This preserves the images but results in larger file sizes.">
+                    <Box 
+                      component="span" 
+                      sx={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        cursor: 'help',
+                      }}
+                    >
+                      <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                    </Box>
+                  </Tooltip>
+                </Box>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                }}>
+                  <FormControlLabel 
+                    value="description" 
+                    control={
+                      <Radio 
+                        sx={{
+                          '&:hover': {
+                            backgroundColor: 'transparent'
+                          },
+                          '&.Mui-checked': {
+                            backgroundColor: 'transparent'
+                          }
+                        }}
+                      />
+                    } 
+                    label="Export images as descriptions"
+                  />
+                  <Tooltip title="When exporting, images will be replaced with a description. This option might take some time for the descriptions to be generated. This is ideal for text-based processing or when you want to reduce file size.">
+                    <Box 
+                      component="span" 
+                      sx={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        cursor: 'help',
+                      }}
+                    >
+                      <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                    </Box>
+                  </Tooltip>
+                </Box>
+              </RadioGroup>
+            </FormControl>
+
+            {/* Show prompt field only when description export type is selected */}
+            {options.imageExportType === 'description' && (
+              <Box sx={{ mt: 2, ml: 4, mr: 2 }}>
+                <Typography variant="caption" sx={{ mb: 0.5, display: 'block' }}>
+                  Model prompt for generating image descriptions:
+                </Typography>
+                <TextField
+                  value={options.imageDescriptionPrompt}
+                  onChange={handleImageDescriptionPromptChange}
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Enter a prompt for the model to describe images"
+                  size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '&.Mui-focused': {
+                        bgcolor: 'transparent'
+                      }
+                    }
+                  }}
+                />
+                <Typography variant="caption" sx={{ mt: 0.5, display: 'block', color: 'text.secondary' }}>
+                  This prompt will be used to generate descriptions for images when exporting.
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
 
         <Box sx={{ mt: 3 }}>
           <Box 
@@ -525,7 +722,10 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
               display: 'flex', 
               alignItems: 'center', 
               cursor: 'pointer',
-              mb: 1
+              mb: 1,
+              '&:hover': {
+                bgcolor: 'transparent'
+              }
             }}
             onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
           >
@@ -533,23 +733,44 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
               Advanced Options
             </Typography>
             <Tooltip title="Advanced export functionality (primarily for data being used for fine-tuning models)">
-              <IconButton size="small" sx={{ ml: 1 }}>
+              <Box 
+                component="span" 
+                sx={{ 
+                  ml: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'help',
+                }}
+              >
                 <HelpOutlineIcon fontSize="small" />
-              </IconButton>
+              </Box>
             </Tooltip>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton size="small">
+            <IconButton 
+              size="small"
+              sx={{
+                '&:hover': {
+                  bgcolor: 'transparent'
+                }
+              }}
+            >
               {showAdvancedOptions ? <ExpandLess /> : <ExpandMore />}
             </IconButton>
           </Box>
           
           <Collapse in={showAdvancedOptions}>
-            <Paper variant="outlined" sx={{ p: 2, mt: 1 }}>
+            <Paper variant="outlined" sx={{ 
+              p: 2, 
+              mt: 1, 
+              '&:hover': {
+                bgcolor: 'transparent'
+              }
+            }}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 These options are for configuring data prepared for fine-tuning models.
               </Typography>
               
-              <Box sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', '&:hover': { bgcolor: 'transparent' } }}>
                 <Button
                   variant="outlined"
                   startIcon={<ShuffleIcon />}
@@ -557,15 +778,25 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   sx={{ 
                     textTransform: 'none',
                     borderRadius: '4px',
-                    mr: 1
+                    mr: 1,
+                    '&:hover': {
+                      bgcolor: 'transparent'
+                    }
                   }}
                 >
                   Shuffle Data
                 </Button>
                 <Tooltip title="Randomly shuffle the data in the application. This is recommended for training to prevent the model from learning the order of examples.">
-                  <IconButton size="small">
+                  <Box 
+                    component="span" 
+                    sx={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'help',
+                    }}
+                  >
                     <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-                  </IconButton>
+                  </Box>
                 </Tooltip>
                 {shuffleData && (
                   <Typography 
@@ -590,47 +821,81 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                   border: '1px solid',
                   borderColor: theme.palette.divider,
                   borderRadius: '4px',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
+                  '&:hover': {
+                    bgcolor: 'transparent'
+                  }
                 }}
               >
                 <AccordionSummary
                   expandIcon={<ExpandMore />}
                   sx={{ 
                     minHeight: '48px',
+                    '&:hover': {
+                      bgcolor: 'transparent'
+                    },
                     '& .MuiAccordionSummary-content': {
                       margin: '8px 0'
                     }
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', '&:hover': { bgcolor: 'transparent' } }}>
                     <TuneIcon sx={{ mr: 1, fontSize: '1.1rem' }} />
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                       MNRL Dataset Filtering
                     </Typography>
                     <Tooltip title="Multiple Negatives Ranking Loss (MNRL) is a training technique that requires specific data formatting. These settings help prepare your data to align with this training loss function.">
-                      <IconButton size="small" sx={{ ml: 0.5 }}>
+                      <Box 
+                        component="span" 
+                        sx={{ 
+                          ml: 0.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'help',
+                        }}
+                      >
                         <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-                      </IconButton>
+                      </Box>
                     </Tooltip>
                   </Box>
                 </AccordionSummary>
-                <AccordionDetails sx={{ pt: 0, pb: 2 }}>
+                <AccordionDetails sx={{ 
+                  pt: 0, 
+                  pb: 2,
+                  '&:hover': {
+                    bgcolor: 'transparent'
+                  }
+                }}>
                   <Box sx={{ mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="body2">Training Batch Size</Typography>
                       <Tooltip title="Batch size determines how many examples are processed together during training. Smaller batch sizes require less memory but may result in noisier gradients.">
-                        <IconButton size="small" sx={{ ml: 0.5 }}>
+                        <Box 
+                          component="span" 
+                          sx={{ 
+                            ml: 0.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            cursor: 'help',
+                          }}
+                        >
                           <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
-                        </IconButton>
+                        </Box>
                       </Tooltip>
                     </Box>
                     <TextField
                       type="number"
                       value={batchSize}
                       onChange={(e) => setBatchSize(Number(e.target.value))}
-                      InputProps={{ inputProps: { min: 2 } }}
+                      InputProps={{ 
+                        inputProps: { min: 2 },
+                        sx: {
+                          '&.Mui-focused': {
+                            bgcolor: 'transparent'
+                          }
+                        }
+                      }}
                       size="small"
-                      sx={{ width: 120 }}
                     />
                   </Box>
                   
@@ -642,7 +907,12 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                       startIcon={isProcessing ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
                       onClick={processMNRL}
                       disabled={isProcessing || qaPairs.length === 0 || !canProcessMNRL()}
-                      sx={{ textTransform: 'none' }}
+                      sx={{ 
+                        textTransform: 'none',
+                        '&.Mui-disabled': {
+                          bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                        }
+                      }}
                     >
                       {isProcessing ? 'Processing...' : 'Process MNRL Validation'}
                     </Button>
@@ -658,7 +928,11 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                     {processResult && (
                       <Alert 
                         severity={processResult.success ? "success" : "error"}
-                        sx={{ mt: 2, fontSize: '0.8rem' }}
+                        sx={{ 
+                          mt: 2, 
+                          fontSize: '0.8rem',
+                          bgcolor: processResult.success ? 'rgba(237, 247, 237, 1)' : 'rgba(253, 237, 237, 1)',
+                        }}
                       >
                         {processResult.message}
                       </Alert>
@@ -691,7 +965,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                           p: 1, 
                           maxHeight: '200px', 
                           overflow: 'auto',
-                          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.03)'
                         }}
                       >
                         {processingLogs.map((log, index) => (
@@ -704,7 +977,7 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
                               fontSize: '0.75rem',
                               mb: 0.5,
                               whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word'
+                              wordBreak: 'break-word',
                             }}
                           >
                             {log}
@@ -738,9 +1011,6 @@ Return only a JSON array containing only the IDs of valid pairs, like this: [1, 
             borderColor: theme.palette.text.secondary,
             border: '1px solid',
             '&:hover': {
-              bgcolor: theme.palette.mode === 'dark' 
-                ? 'rgba(255, 255, 255, 0.05)'
-                : 'rgba(0, 0, 0, 0.05)',
               borderColor: theme.palette.text.primary,
             }
           }}

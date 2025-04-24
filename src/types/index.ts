@@ -2,15 +2,39 @@ import { ReactNode } from 'react';
 
 // QA Pair for the main application data
 export interface QAPair {
-  id: number;
+  id: number | string;
   context: string;
   question: string;
   answer: string;
+  sources?: string;
   selected?: boolean;
   generating?: {
     question: boolean;
     answer: boolean;
   };
+}
+
+// Export options interface for the ExportOptionsDialog
+export interface ExportOptions {
+  format: 'csv' | 'jsonl';
+  columns: {
+    field: string;
+    originalName: string;
+    customName: string;
+    selected: boolean;
+  }[];
+  batchSize?: number;
+  shuffle?: boolean;
+  data?: QAPair[];
+  imageExportType?: 'description' | 'fullImage';
+  imageDescriptionPrompt?: string;
+}
+
+// Import options interface for the ImportOptionsDialog
+export interface ImportOptions {
+  importType: 'fileOnly' | 'fileAndImages';
+  file: File | null;
+  imageFolder: FileSystemDirectoryHandle | null;
 }
 
 // Ollama settings types

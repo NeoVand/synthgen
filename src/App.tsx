@@ -12,6 +12,7 @@ import {
   alpha,
   Tooltip,
   MenuItem,
+  FormControlLabel,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
@@ -64,44 +65,20 @@ import { default as CustomAboutDialog } from './components/dialogs/AboutDialog' 
 import ImportConfirmationDialog from './components/dialogs/ImportConfirmationDialog'  // Import the ImportConfirmationDialog component
 import ChunkingConfirmationDialog from './components/dialogs/ChunkingConfirmationDialog'  // Import the ChunkingConfirmationDialog component
 import TableView from './components/TableView'  // Add this import
-import ExportOptionsDialog, { ExportOptions } from './components/dialogs/ExportOptionsDialog'
+import ExportOptionsDialog from './components/dialogs/ExportOptionsDialog'
+import ImportOptionsDialog from './components/dialogs/ImportOptionsDialog'
 
 // --- Types ---
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
-interface QAPair {
-  id: number
-  context: string
-  question: string
-  answer: string
-  selected?: boolean
-  generating?: {
-    question: boolean
-    answer: boolean
-  }
-}
-
-interface OllamaSettingsType {
-  model: string
-  temperature: number
-  topP: number
-  useFixedSeed: boolean
-  seed: number
-  numCtx: number
-}
+// Import QAPair and other types from types/index.ts, removing conflicting ones
+import { QAPair, OllamaSettings as OllamaSettingsType, OllamaError, ViewMode, Section, SectionEntry, GenerationProgress, ExportOptions, ImportOptions } from './types';
+// Keep this import as is
+import { defaultTemplates, replacePlaceholders } from './config/promptTemplates';
 
 interface AppProps {
   onThemeChange: () => void;
 }
-
-interface Section {
-  id: string;
-  title: string;
-  icon?: React.ReactNode;
-  description: string;
-}
-
-type SectionEntry = { sectionId: string; element: HTMLElement };
 
 type ListContextValue = {
   getListLength: () => number;
@@ -147,12 +124,6 @@ function getSectionRegistry() {
 // Add type for chunking algorithms
 type ChunkingAlgorithm = 'recursive' | 'line' | 'csv-tsv' | 'jsonl' | 'sentence-chunks' | 'markdown-chunks' | 'rolling-sentence-chunks';
 
-// Add these new types and constants
-interface OllamaError {
-  message: string;
-  isOllamaError: boolean;
-}
-
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434';
 
 // Add a helper function to check Ollama connection
@@ -165,15 +136,12 @@ const checkOllamaConnection = async (): Promise<boolean> => {
   }
 };
 
-// Add this with other type definitions at the top of the file
-type ViewMode = 'table' | 'flashcard';
-
 // Update the isTableView and isFlashcardView functions
 const isTableView = (mode: ViewMode): boolean => mode === 'table';
 const isFlashcardView = (mode: ViewMode): boolean => mode === 'flashcard';
 
-// Import the replacePlaceholders helper
-import { replacePlaceholders } from './config/promptTemplates';
+// Remove the redundant import
+// import { replacePlaceholders } from './config/promptTemplates';
 
 const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const theme = useTheme();
@@ -184,6 +152,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [isOllamaConnected, setIsOllamaConnected] = useState<boolean>(false);
   const [showAboutDialog, setShowAboutDialog] = useState<boolean>(false);
   const [showImportDialog, setShowImportDialog] = useState<boolean>(false);
+  const [showImportOptionsDialog, setShowImportOptionsDialog] = useState<boolean>(false);
   const [showExportDialog, setShowExportDialog] = useState<boolean>(false);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [showChunkingDialog, setShowChunkingDialog] = useState<boolean>(false);
@@ -253,7 +222,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Document text + file name
   const [rawText, setRawText] = useState<string>('')
-  const [fileName, setFileName] = useState<string>('')
+  const [fileName, setFileName] = useState<string | null>(null)
 
   // Summarization
   const [summaryPrompt, setSummaryPrompt] = useState<string>(
@@ -268,6 +237,18 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [promptAnswer, setPromptAnswer] = useState<string>(
     "Based on the text (and summary) plus the question, provide a concise answer. Don't add any markdown or greetings. Only the Answer."
   )
+  
+  // Image Q&A prompts
+  const [imagePromptQuestion, setImagePromptQuestion] = useState<string>(() => {
+    // Initialize with the Image Analysis QA template from defaultTemplates
+    const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
+    return imageTemplate?.questionPrompt || '';
+  })
+  const [imagePromptAnswer, setImagePromptAnswer] = useState<string>(() => {
+    // Initialize with the Image Analysis QA template from defaultTemplates
+    const imageTemplate = defaultTemplates.find(t => t.name === 'Image Analysis QA');
+    return imageTemplate?.answerPrompt || '';
+  })
 
   // Q&A table
   const [qaPairs, setQaPairs] = useState<QAPair[]>([])
@@ -280,7 +261,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Add state for CSV columns
   const [csvColumns, setCsvColumns] = useState<{name: string; selected: boolean}[]>([])
-  const [csvData, setCsvData] = useState<string[][]>([])
+  // Remove the unused state declaration
+  // const [csvData, setCsvData] = useState<string[][]>([])
 
   // Add state for JSONL keys
   const [jsonlKeys, setJsonlKeys] = useState<{
@@ -347,7 +329,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   const [generationType, setGenerationType] = useState<'summary' | 'qa' | 'question' | 'answer' | null>(null);
 
   // Add state for tracking generation progress
-  const [generationProgress, setGenerationProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress>({ completed: 0, total: 0 });
 
   // Add state for sidebar
   const [sidebarWidth, setSidebarWidth] = useState<number>(400);
@@ -359,6 +341,12 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Update the viewMode state declaration
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+
+  // Add state for processImages near the top of the component with other state declarations
+  const [processImages, setProcessImages] = useState<boolean>(false);
+  const [originalFileData, setOriginalFileData] = useState<ArrayBuffer | null>(null);
+  // Store extracted images
+  const [extractedImages, setExtractedImages] = useState<Array<{name: string, dataUrl: string}>>([]);
 
   // Add resize handler
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -418,6 +406,11 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     try {
       let textContent = ''
       if (ext === 'pdf') {
+        // Store the file data for later use
+        const arrayBuffer = await file.arrayBuffer()
+        // Create a new copy of the buffer to prevent detached buffer issues
+        const bufferCopy = arrayBuffer.slice(0);
+        setOriginalFileData(bufferCopy)
         textContent = await parsePdfFile(file)
       } else if (ext === 'docx') {
         textContent = await parseDocxFile(file)
@@ -437,11 +430,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         // Set initial column selection state (all selected by default)
         setCsvColumns(columnNames.map(name => ({ name, selected: true })))
         
-        // Store the raw data for later processing
-        const rows = textContent.split('\n').map(row => 
+        // Process the data but don't store in a variable since it's not used
+        textContent.split('\n').map(row => 
           row.split(delimiter).map(cell => cell.trim().replace(/^["']|["']$/g, ''))
         )
-        setCsvData(rows)
         
         // Set chunking algorithm to CSV/TSV
         setChunkingAlgorithm('csv-tsv')
@@ -747,8 +739,266 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     }
 
     try {
-      let chunks: string[] = [];
+      // Helper functions for JSONL processing
+      const getNestedValue = (obj: any, path: string): any => {
+        const parts = path.split('.');
+        let current = obj;
+        
+        for (const part of parts) {
+          if (current === null || current === undefined || typeof current !== 'object') {
+            return undefined;
+          }
+          current = current[part];
+        }
+        
+        return current;
+      };
+      
+      // Helper function to format values based on their type
+      const formatValue = (value: any): string => {
+        if (value === undefined || value === null) {
+          return '';
+        } else if (Array.isArray(value)) {
+          // For arrays, join items as comma-separated list
+          return value.join(', ');
+        } else if (typeof value === 'object') {
+          // For objects, convert to string representation
+          return JSON.stringify(value);
+        } else {
+          // For primitive values, convert to string
+          return String(value);
+        }
+      };
 
+      // Extract existing image chunks if present
+      const existingImageChunks: string[] = [];
+      if (qaPairs.length > 0) {
+        qaPairs.forEach(pair => {
+          if (pair.context.includes('<div class="pdf-page-image">')) {
+            existingImageChunks.push(pair.context);
+          }
+        });
+      }
+
+      // Create a variable to store page image data
+      let pageImageDataList: { pageNum: number; dataUrl: string }[] = [];
+      
+      // If it's a PDF and processImages is enabled, extract images first
+      if (fileName?.toLowerCase().endsWith('.pdf') && processImages && originalFileData) {
+        try {
+          // Create a copy of the ArrayBuffer to prevent issues with detached buffers
+          // This happens when the buffer is transferred or becomes detached after operations
+          let bufferData: ArrayBuffer;
+          try {
+            // Try to create a new view - this will fail if the buffer is detached
+            new Uint8Array(originalFileData);
+            // If we get here, the buffer is not detached, we can use it directly
+            bufferData = originalFileData;
+          } catch (e) {
+            // Buffer is detached, need to reload the file
+            console.warn("Original file buffer was detached, prompting user to re-upload file");
+            alert("Please re-upload your PDF file to process images. The original data is no longer available.");
+            setProcessImages(false);
+            return;
+          }
+          
+          // Initialize PDF.js with our buffer
+          const pdfDoc = await getDocument({ data: bufferData }).promise
+          let totalImages = 0
+          let totalVectorGraphics = 0
+          let totalFormXObjects = 0
+          let pageImageDetails: {page: number, count: number, sizes: string[]}[] = []
+          
+          // Track pages with visual elements to render later
+          const pagesWithVisuals: number[] = []
+          
+          console.log(`Processing PDF with ${pdfDoc.numPages} pages for images`);
+          
+          // Enhanced approach to detect more types of images and graphics
+          for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+            try {
+              const page = await pdfDoc.getPage(pageNum)
+              const operatorList = await page.getOperatorList()
+              const commonObjs = page.commonObjs
+              
+              // Count various types of visual elements
+              let pageImageCount = 0
+              let pageSvgCount = 0
+              let pageFormXObjectCount = 0
+              const imageSizes: string[] = []
+              
+              // Track XObject names to avoid double counting
+              const processedXObjects = new Set<string>()
+              
+              for (let i = 0; i < operatorList.fnArray.length; i++) {
+                const op = operatorList.fnArray[i]
+                const args = operatorList.argsArray[i]
+                
+                // Direct image operations
+                if (op === PDFJS.OPS.paintImageXObject) {
+                  const imageRef = args[0]
+                  
+                  // Skip if we've already processed this XObject
+                  if (processedXObjects.has(imageRef)) {
+                    continue
+                  }
+                  
+                  processedXObjects.add(imageRef)
+                  pageImageCount++
+                  
+                  // Try to get image size if available
+                  try {
+                    const img = commonObjs.get(imageRef)
+                    if (img && img.width && img.height) {
+                      imageSizes.push(`${img.width}x${img.height}`)
+                    }
+                  } catch (e) {
+                    // Ignore errors when trying to get image details
+                  }
+                } 
+                // Form XObjects might contain embedded images
+                else if (op === PDFJS.OPS.paintFormXObjectBegin) {
+                  pageFormXObjectCount++
+                  totalFormXObjects++
+                }
+                // Check for vector graphics operations
+                else if ([
+                  PDFJS.OPS.constructPath,
+                  PDFJS.OPS.stroke,
+                  PDFJS.OPS.fill,
+                  PDFJS.OPS.shadingFill,
+                  PDFJS.OPS.eoFill
+                ].includes(op)) {
+                  pageSvgCount++
+                }
+                // Check for masked images
+                else if (op === PDFJS.OPS.setGState) {
+                  try {
+                    const gStateId = args[0]
+                    const gState = commonObjs.get(gStateId)
+                    
+                    // Check if this graphics state has a soft mask (transparent image)
+                    if (gState && gState.smask) {
+                      pageImageCount++
+                    }
+                  } catch (e) {
+                    // Ignore errors when trying to get graphics state details
+                  }
+                }
+              }
+              
+              if (pageImageCount > 0 || pageSvgCount > 0 || pageFormXObjectCount > 0) {
+                totalImages += pageImageCount
+                totalVectorGraphics += pageSvgCount
+                
+                // Add this page to the list of pages with visual elements
+                pagesWithVisuals.push(pageNum)
+                
+                // Record details for this page
+                pageImageDetails.push({
+                  page: pageNum,
+                  count: pageImageCount,
+                  sizes: imageSizes
+                })
+                
+                console.log(`Page ${pageNum}: ${pageImageCount} images, ${pageSvgCount} vector graphics elements, ${pageFormXObjectCount} form XObjects`)
+                if (imageSizes.length > 0) {
+                  console.log(`  Image sizes: ${imageSizes.join(', ')}`)
+                }
+              }
+              
+              // Check for annotations that might contain images
+              const annotations = await page.getAnnotations()
+              for (const annotation of annotations) {
+                if (annotation.subtype === 'Widget' || annotation.subtype === 'Stamp') {
+                  console.log(`Page ${pageNum}: Contains ${annotation.subtype} annotation that may include images`)
+                  if (!pagesWithVisuals.includes(pageNum)) {
+                    pagesWithVisuals.push(pageNum)
+                  }
+                }
+              }
+              
+            } catch (pageError) {
+              console.warn(`Error processing page ${pageNum} for images:`, pageError)
+            }
+          }
+          
+          // Render pages with visual elements to canvas and convert to data URLs
+          if (pagesWithVisuals.length > 0) {
+            console.log(`Rendering ${pagesWithVisuals.length} pages containing visual elements`)
+            
+            for (const pageNum of pagesWithVisuals) {
+              try {
+                const page = await pdfDoc.getPage(pageNum)
+                
+                // Create a new canvas for this page
+                const canvas = document.createElement('canvas')
+                const ctx = canvas.getContext('2d')
+                
+                if (!ctx) {
+                  console.error(`Failed to get canvas context for page ${pageNum}`)
+                  continue
+                }
+                
+                // Set scale and viewport - adjust scale as needed for quality vs file size
+                const scale = 3 // Higher value for better quality (Increased from 1.5)
+                const viewport = page.getViewport({ scale })
+                
+                // Set canvas dimensions to match the page
+                canvas.width = viewport.width
+                canvas.height = viewport.height
+                
+                // Render the page to canvas
+                const renderContext = {
+                  canvasContext: ctx,
+                  viewport: viewport
+                }
+                
+                await page.render(renderContext).promise
+                
+                // Convert canvas to data URL (image)
+                // Changed to PNG for lossless quality, removed quality param (not applicable for PNG)
+                const dataUrl = canvas.toDataURL('image/png')
+                
+                // Store the rendered page image
+                pageImageDataList.push({ pageNum, dataUrl })
+                
+                console.log(`Rendered page ${pageNum} as image (${Math.round(dataUrl.length / 1024)} KB)`)
+              } catch (renderError) {
+                console.error(`Error rendering page ${pageNum}:`, renderError)
+              }
+            }
+          }
+          
+          if (totalImages > 0 || totalVectorGraphics > 0 || totalFormXObjects > 0) {
+            console.log(`PDF Summary:`)
+            console.log(`- ${totalImages} raster images detected`)
+            console.log(`- ${totalVectorGraphics} vector graphic elements detected`)
+            console.log(`- ${totalFormXObjects} form XObjects detected (may contain additional images)`)
+            console.log(`- ${pageImageDataList.length} pages rendered as images`)
+            
+            // Detailed report for pages with images
+            if (pageImageDetails.length > 0) {
+              console.log(`Detailed image report:`)
+              pageImageDetails.forEach(detail => {
+                console.log(`Page ${detail.page}: ${detail.count} images`)
+                if (detail.sizes.length > 0) {
+                  console.log(`  Sizes: ${detail.sizes.join(', ')}`)
+                }
+              })
+            }
+          } else {
+            console.log(`No images or graphics detected in the PDF document`)
+          }
+        } catch (pdfError) {
+          console.error(`Error processing PDF for images:`, pdfError);
+        }
+      }
+      
+      // Process text chunks
+      let chunks: string[] = [];
+      
+      // Different chunking algorithm based on selection
       switch (chunkingAlgorithm) {
         case 'recursive':
           const splitter = new RecursiveCharacterTextSplitter({
@@ -782,164 +1032,136 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           const windowNodes = windowSplitter.getNodesFromDocuments([new Document({ text: rawText })]);
           chunks = windowNodes.map(node => node.text);
           break;
-
+          
         case 'csv-tsv':
-          try {
-            if (csvData.length < 2) {
-              throw new Error('CSV/TSV must have at least a header row and one data row');
+          // Parse the CSV/TSV text using the existing parseCSV function in this file
+          const csvData: string[][] = [];
+          if (rawText.trim()) {
+            // We'll reuse the existing parseCSV function that's defined later in this file
+            // to avoid errors with 'parseCSV' not being found in scope
+            const lines = rawText.split('\n').map(line => line.trim()).filter(Boolean);
+            for (const line of lines) {
+              const row: string[] = [];
+              let current = '';
+              let inQuotes = false;
+              
+              for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                const nextChar = line[i + 1];
+                
+                if (char === '"' && !inQuotes) {
+                  inQuotes = true;
+                  continue;
+                }
+                
+                if (char === '"' && inQuotes) {
+                  if (nextChar === '"') {
+                    current += '"';
+                    i++; // Skip the next quote
+                  } else {
+                    inQuotes = false;
+                  }
+                  continue;
+                }
+                
+                if ((char === ',' || char === '\t') && !inQuotes) {
+                  row.push(current);
+                  current = '';
+                  continue;
+                }
+                
+                current += char;
+              }
+              
+              // Add the last column
+              row.push(current);
+              csvData.push(row);
             }
-
-            // Get selected columns and their indices
-            const selectedColumns = csvColumns
-              .map((col, index) => ({ name: col.name, index, selected: col.selected }))
-              .filter(col => col.selected);
-
-            if (selectedColumns.length === 0) {
-              throw new Error('Please select at least one column to include');
-            }
-
-            // Process each data row into a formatted string
-            chunks = csvData.slice(1).map(row => {
-              return selectedColumns
+          }
+          
+          const hasHeaders = csvData.length > 0 && csvData[0].length > 0;
+          
+          if (hasHeaders && csvColumns.length > 0) {
+            // Start from row 1 to skip headers
+            chunks = csvData.slice(1).map((row: any) => {
+              return csvColumns
+                .filter(col => col.selected)
                 .map(col => {
-                  const value = row[col.index];
-                  // Only include non-empty values
-                  return value ? `${col.name}: ${value}` : null;
+                  const colIndex = csvData[0].indexOf(col.name);
+                  return colIndex >= 0 ? row[colIndex] : '';
                 })
-                .filter(Boolean) // Remove null entries
-                .join('\n');
-            })
-            .filter(chunk => chunk.trim().length > 0); // Remove empty chunks
-          } catch (err) {
-            console.error('Error parsing CSV/TSV:', err);
-            alert('Failed to parse CSV/TSV. Please check the file format.');
-            return;
+                .join(' ');
+            }).filter((text: string) => text.trim());
           }
           break;
           
         case 'jsonl':
-          try {
-            if (jsonlData.length === 0) {
-              throw new Error('No valid JSON objects found in the file');
-            }
-
-            // Get selected keys
-            const selectedKeys = jsonlKeys
+          // Process JSONL data
+          chunks = jsonlData.map(obj => {
+            return jsonlKeys
               .filter(key => key.selected)
-              .map(key => key.path);
-
-            if (selectedKeys.length === 0) {
-              throw new Error('Please select at least one key to include');
-            }
-
-            // Helper function to get nested value from an object using a path
-            const getNestedValue = (obj: any, path: string): any => {
-              const parts = path.split('.');
-              let current = obj;
-              
-              for (const part of parts) {
-                if (current === null || current === undefined || typeof current !== 'object') {
-                  return undefined;
-                }
-                current = current[part];
-              }
-              
-              return current;
-            };
-
-            // Helper function to format values based on their type
-            const formatValue = (value: any): string => {
-              if (value === undefined || value === null) {
-                return '';
-              } else if (Array.isArray(value)) {
-                // For arrays, format each item with 1-based indices
-                if (value.length === 0) return '[]';
-                
-                // If array contains objects, format them nicely
-                if (typeof value[0] === 'object' && value[0] !== null) {
-                  return value.map((item, index) => {
-                    if (typeof item === 'object' && item !== null) {
-                      return `${index + 1}. ${JSON.stringify(item, null, 2).replace(/\n/g, '\n   ')}`;
-                    }
-                    return `${index + 1}. ${String(item)}`;
-                  }).join('\n');
-                }
-                
-                // For simple arrays, join with newlines and 1-based indices
-                return value.map((item, index) => `${index + 1}. ${String(item)}`).join('\n');
-              } else if (typeof value === 'object') {
-                // For objects, pretty print with indentation
-                return `\n${JSON.stringify(value, null, 2)}`;
-              } else {
-                // For primitive values, convert to string
-                return String(value);
-              }
-            };
-
-            // Process each JSON object into a formatted string
-            chunks = jsonlData.map(obj => {
-              const formattedChunks: string[] = [];
-              
-              // Process each selected key
-              selectedKeys.forEach(path => {
-                const value = getNestedValue(obj, path);
-                const parts = path.split('.');
-                const name = parts[parts.length - 1];
-                
-                // Skip undefined or null values
-                if (value === undefined || value === null) {
-                  return;
-                }
-                
-                // For arrays, create a separate entry for each item
-                if (Array.isArray(value)) {
-                  // Format each array item with 1-based indices
-                  const formattedItems = value.map((item, index) => {
-                    if (typeof item === 'object' && item !== null) {
-                      return `${name}: ${index + 1}. ${JSON.stringify(item, null, 2).replace(/\n/g, '\n   ')}`;
-                    }
-                    return `${name}: ${index + 1}. ${String(item)}`;
-                  });
-                  
-                  // Add all formatted items to the chunks
-                  formattedChunks.push(...formattedItems);
-                } else {
-                  // For non-arrays, add a single entry
-                  formattedChunks.push(`${name}: ${formatValue(value)}`);
-                }
-              });
-              
-              return formattedChunks.join('\n');
-            })
-            .filter(chunk => chunk.trim().length > 0); // Remove empty chunks
-          } catch (err) {
-            console.error('Error processing JSONL:', err);
-            alert('Failed to process JSONL. Please check the file format.');
-            return;
-          }
+              .map(key => {
+                const value = getNestedValue(obj, key.path);
+                return formatValue(value);
+              })
+              .join(' ');
+          }).filter(text => text.trim());
           break;
       }
-
-      // If there are existing Q&A pairs, show the confirmation dialog
-      if (qaPairs.length > 0) {
-        setPendingChunks(chunks);
-        setShowChunkingDialog(true);
-        return;
+      
+      // Create combined chunks array based on conditions
+      let combinedChunks: string[] = [];
+      
+      // Add newly processed images if available
+      if (fileName?.toLowerCase().endsWith('.pdf') && processImages && pageImageDataList.length > 0) {
+        const imageChunks: string[] = [];
+        
+        // Sort page images by page number
+        pageImageDataList.sort((a, b) => a.pageNum - b.pageNum);
+        
+        // Add each page image as a separate chunk at the beginning
+        pageImageDataList.forEach(({ pageNum, dataUrl }) => {
+          const imageChunk = `<div class="pdf-page-image">
+            <img src="${dataUrl}" alt="PDF Page ${pageNum}" style="max-width: 100%; height: auto;" />
+          </div>`;
+          imageChunks.push(imageChunk);
+        });
+        
+        // Prepend image chunks to the text chunks
+        combinedChunks = [...imageChunks, ...chunks];
+      } else {
+        // If not processing images in this run, still include text chunks
+        combinedChunks = chunks;
       }
 
       // If no existing Q&A pairs, proceed with creating new pairs
-      const pairs: QAPair[] = chunks.map((ck, idx) => ({
-        id: idx + 1,
-        context: ck,
-        question: '',
-        answer: '',
-        selected: false,
-        generating: {
-          question: false,
-          answer: false
-        }
-      }))
-      setQaPairs(pairs)
+      if (qaPairs.length === 0) {
+        const pairs: QAPair[] = combinedChunks.map((ck, idx) => ({
+          id: idx + 1,
+          context: ck,
+          question: '',
+          answer: '',
+          selected: false,
+          generating: {
+            question: false,
+            answer: false
+          }
+        }));
+        setQaPairs(pairs);
+        
+        // Auto-expand cells with images
+        const newExpandedCells: Record<string, boolean> = { ...expandedCells };
+        pairs.forEach((pair) => {
+          if (pair.context.includes('<div class="pdf-page-image">')) {
+            newExpandedCells[`${pair.id}-context`] = true;
+          }
+        });
+        setExpandedCells(newExpandedCells);
+      } else {
+        // Store the existing image chunks with the new text chunks for the dialog
+        setPendingChunks(combinedChunks);
+        setShowChunkingDialog(true);
+      }
     } catch (err) {
       console.error('Error chunking doc:', err)
       alert('Failed to chunk document.')
@@ -952,7 +1174,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Add a debounced update function using useCallback
   const debouncedUpdateQaPairs = useCallback(
-    debounce((id: number, updates: Partial<QAPair>) => {
+    debounce((id: string | number, updates: Partial<QAPair>) => {
       setQaPairs(prev =>
         prev.map(qa =>
           qa.id === id ? { ...qa, ...updates } : qa
@@ -962,6 +1184,40 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     []
   );
 
+  // Helper to extract base64 image data from context HTML
+  const extractBase64ImageFromHTML = (html: string): string | null => {
+    // Check if the HTML contains image
+    if (!html.includes('<div class="pdf-page-image">')) return null;
+    
+    try {
+      // Extract the base64 data from the src attribute with better regex pattern
+      // This pattern will capture the MIME type and the base64 data separately
+      const imgSrcMatch = html.match(/src="data:image\/([^;]+);base64,([^"]+)"/);
+      
+      if (!imgSrcMatch || imgSrcMatch.length < 3) {
+        console.log('[DEBUG-APP] Failed to extract base64 image data from HTML');
+        return null;
+      }
+      
+      const mimeType = imgSrcMatch[1];
+      const base64Data = imgSrcMatch[2];
+      
+      // Perform basic validation on the base64 data
+      if (!base64Data || base64Data.length < 100) { // Arbitrary minimum length to ensure we have actual data
+        console.log('[DEBUG-APP] Extracted base64 data is too short or invalid');
+        return null;
+      }
+      
+      // Only log the length to avoid huge console output
+      console.log(`[DEBUG-APP] Successfully extracted base64 image data (${mimeType}), length: ${base64Data.length}`);
+      
+      return base64Data;
+    } catch (error) {
+      console.error('[DEBUG-APP] Error extracting base64 image data:', error);
+      return null;
+    }
+  };
+  
   // Modify the doStreamCall function to use a buffer
   const doStreamCall = async function* (prompt: string) {
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
@@ -984,26 +1240,77 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         abortControllerRef.current = new AbortController();
       }
       
+      // Check if the prompt includes image HTML
+      const containsImageHtml = prompt.includes('<div class="pdf-page-image">');
+      if (containsImageHtml) {
+        console.log('[DEBUG-APP] Detected image HTML in prompt');
+      }
+      
+      // Extract image data and clean prompt if needed
+      let imageBase64 = null;
+      let cleanPrompt = prompt;
+      
+      if (containsImageHtml) {
+        // Extract the base64 image data
+        imageBase64 = extractBase64ImageFromHTML(prompt);
+        
+        // More thoroughly remove all HTML from the prompt
+        // First capture the main text outside the HTML
+        const beforeHtml = prompt.split('<div class="pdf-page-image">')[0];
+        const afterHtml = prompt.split('</div>').pop() || '';
+        
+        // Combine the text parts with a simple indicator
+        cleanPrompt = `You are an expert at analyzing images and extracting information from them. 
+                       Please analyze the provided image and respond to the following: ${beforeHtml} ${afterHtml}`;
+        
+        console.log('[DEBUG-APP] Cleaned prompt:', cleanPrompt.substring(0, 200) + '...');
+      }
+      
+      // Prepare request body based on whether we have an image
+      const requestBody: any = {
+        model: ollamaSettings.model,
+        prompt: cleanPrompt,
+        stream: true,
+        options: {
+          temperature: ollamaSettings.temperature,
+          top_p: ollamaSettings.topP,
+          seed: ollamaSettings.useFixedSeed ? ollamaSettings.seed : undefined,
+          num_ctx: ollamaSettings.numCtx,
+        }
+      };
+      
+      // Add images array if we have an image
+      if (imageBase64) {
+        requestBody.images = [imageBase64];
+        console.log('[DEBUG-APP] Added image data to request. Request structure:', 
+          JSON.stringify({
+            ...requestBody,
+            images: ['[BASE64_DATA_PRESENT]'] // Don't log the actual base64 data
+          }, null, 2)
+        );
+      } else if (containsImageHtml) {
+        console.error('[DEBUG-APP] Image HTML detected but failed to extract base64 data');
+      } else {
+        // Log the request structure for text-only requests
+        console.log('[DEBUG-APP] Sending text-only request. Request structure:', 
+          JSON.stringify(requestBody, null, 2)
+        );
+      }
+      
+      console.log('[DEBUG-APP] Sending request to Ollama API with model:', ollamaSettings.model);
+      
       response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: ollamaSettings.model,
-          prompt: prompt,
-          stream: true,
-          options: {
-            temperature: ollamaSettings.temperature,
-            top_p: ollamaSettings.topP,
-            seed: ollamaSettings.useFixedSeed ? ollamaSettings.seed : undefined,
-            num_ctx: ollamaSettings.numCtx,
-          }
-        }),
+        body: JSON.stringify(requestBody),
         signal: abortControllerRef.current.signal
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DEBUG-APP] Ollama API error:', response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -1087,24 +1394,31 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   };
 
   // Add these new functions before the generateQA function
-  const generateQuestion = async (row: QAPair) => {
+  const generateQuestion = async (row: QAPair): Promise<string> => {
     let questionText = '';
 
     // Set initial generating state
     setQaPairs(prev =>
       prev.map(r =>
-        r.id === row.id ? { ...r, generating: { question: true, answer: false } } : r
+        r.id === row.id ? { ...r, generating: { question: true, answer: r.generating?.answer || false } } : r
       )
     );
 
     try {
-      // Generate question using replacePlaceholders
-      const questionPrompt = replacePlaceholders(promptQuestion, {
+      // Determine if the context is an image
+      const isImageContext = row.context.includes('<div class="pdf-page-image">');
+      
+      // Select the appropriate prompt template based on context type
+      const currentQuestionPrompt = isImageContext ? imagePromptQuestion : promptQuestion;
+      
+      // Generate question using the selected prompt template
+      const processedPrompt = replacePlaceholders(currentQuestionPrompt, {
         summary: docSummary,
         chunk: row.context
       });
       
-      for await (const chunk of doStreamCall(questionPrompt)) {
+      // Call doStreamCall with the processed prompt (it handles image extraction internally)
+      for await (const chunk of doStreamCall(processedPrompt)) {
         if (shouldStopGeneration) break;
         questionText += chunk;
         debouncedUpdateQaPairs(row.id, { question: questionText });
@@ -1116,22 +1430,31 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           r.id === row.id ? {
             ...r,
             question: questionText,
-            generating: { question: false, answer: false }
+            generating: { question: false, answer: r.generating?.answer || false }
           } : r
         )
       );
 
-      return questionText;
+      return questionText; // Ensure return value
     } catch (err) {
       if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
         throw err;
       }
       console.error('Error generating question:', err);
-      return '';
+      // Final update on error
+      setQaPairs(prev =>
+        prev.map(r =>
+          r.id === row.id ? {
+            ...r,
+            generating: { question: false, answer: r.generating?.answer || false }
+          } : r
+        )
+      );
+      return ''; // Return empty string on error
     }
   };
 
-  const generateAnswer = async (row: QAPair) => {
+  const generateAnswer = async (row: QAPair): Promise<string> => {
     if (!row.question.trim()) {
       console.warn('Skipping answer generation - no question provided');
       return '';
@@ -1142,19 +1465,26 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     // Set generating state for answer
     setQaPairs(prev =>
       prev.map(r =>
-        r.id === row.id ? { ...r, generating: { question: false, answer: true } } : r
+        r.id === row.id ? { ...r, generating: { question: r.generating?.question || false, answer: true } } : r
       )
     );
 
     try {
-      // Generate answer using replacePlaceholders
-      const answerPrompt = replacePlaceholders(promptAnswer, {
+      // Determine if the context is an image
+      const isImageContext = row.context.includes('<div class="pdf-page-image">');
+      
+      // Select the appropriate prompt template based on context type
+      const currentAnswerPrompt = isImageContext ? imagePromptAnswer : promptAnswer;
+      
+      // Generate answer using the selected prompt template
+      const processedPrompt = replacePlaceholders(currentAnswerPrompt, {
         summary: docSummary,
         chunk: row.context,
         question: row.question
       });
       
-      for await (const chunk of doStreamCall(answerPrompt)) {
+      // Call doStreamCall with the processed prompt (it handles image extraction internally)
+      for await (const chunk of doStreamCall(processedPrompt)) {
         if (shouldStopGeneration) break;
         answerText += chunk;
         debouncedUpdateQaPairs(row.id, { answer: answerText });
@@ -1166,33 +1496,41 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
           r.id === row.id ? {
             ...r,
             answer: answerText,
-            generating: { question: false, answer: false }
+            generating: { question: r.generating?.question || false, answer: false }
           } : r
         )
       );
 
-      return answerText;
+      return answerText; // Ensure return value
     } catch (err) {
-      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
+     if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
         throw err;
       }
       console.error('Error generating answer:', err);
-      return '';
+      // Final update on error
+      setQaPairs(prev =>
+        prev.map(r =>
+          r.id === row.id ? {
+            ...r,
+            generating: { question: r.generating?.question || false, answer: false }
+          } : r
+        )
+      );
+      return ''; // Return empty string on error
     }
   };
 
-  // Modify the existing generateQA function to use the new abstracted functions
-  const generateQA = async (row: QAPair) => {
+  // Fix the generateQA function to properly handle error cases
+  const generateQA = async (row: QAPair): Promise<{ question: string, answer: string }> => {
     try {
-      const questionText = await generateQuestion(row);
-      if (shouldStopGeneration) return;
+      const question = await generateQuestion(row);
+      if (shouldStopGeneration || !question) return { question: '', answer: '' };
       
-      await generateAnswer({ ...row, question: questionText });
+      const answer = await generateAnswer({ ...row, question });
+      return { question, answer };
     } catch (err) {
-      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'AbortError')) {
-        throw err;
-      }
-      console.error('Error generating Q&A:', err);
+      console.error("Error generating QA pair:", err);
+      return { question: '', answer: '' };
     }
   };
 
@@ -1482,7 +1820,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
       // If we're appending, get the highest existing ID
       const startId = mode === 'append' 
-        ? Math.max(...qaPairs.map(qa => qa.id)) + 1 
+        ? Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1 
         : 1;
 
       // Convert rows to QAPairs
@@ -1521,6 +1859,95 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     setShowExportDialog(true);
   }
   
+  // Add a new state for the default image description header
+  const defaultImageDescriptionHeader = `
+
+### GUIDELINES:
+- Output only the result of your task, no other text or comments (No "Here is the description of the image:" or anything like that) 
+
+### YOUR TASK:
+`;
+
+  const generateImageDescription = async (imageHtml: string, prompt: string): Promise<string> => {
+    try {
+      // Extract the base64 image data
+      const imageBase64 = extractBase64ImageFromHTML(imageHtml);
+      
+      if (!imageBase64) {
+        console.error('[DEBUG-APP] Failed to extract base64 data from image HTML');
+        return '[Failed to process image]';
+      }
+      
+      // Extract page number if available
+      const pageMatch = imageHtml.match(/Page (\d+)/);
+      const pageNumber = pageMatch ? pageMatch[1] : 'unknown';
+      
+      // Create a new AbortController if none exists
+      if (!abortControllerRef.current) {
+        abortControllerRef.current = new AbortController();
+      }
+      
+      // Combine the default header with the user's prompt
+      const fullPrompt = `${defaultImageDescriptionHeader}\n${prompt}`;
+      
+      // Prepare request body
+      const requestBody: any = {
+        model: ollamaSettings.model,
+        prompt: fullPrompt,
+        stream: false, // Use non-streaming for simplicity in this case
+        options: {
+          temperature: ollamaSettings.temperature,
+          top_p: ollamaSettings.topP,
+          seed: ollamaSettings.useFixedSeed ? ollamaSettings.seed : undefined,
+          num_ctx: ollamaSettings.numCtx,
+        },
+        images: [imageBase64]
+      };
+      
+      // Log the request details (without the full base64 image data for brevity)
+      console.log('[DEBUG-APP] Image description request details:');
+      console.log('[DEBUG-APP] Model:', ollamaSettings.model);
+      console.log('[DEBUG-APP] Page:', pageNumber);
+      console.log('[DEBUG-APP] Full prompt:', fullPrompt);
+      console.log('[DEBUG-APP] Temperature:', ollamaSettings.temperature);
+      console.log('[DEBUG-APP] Top P:', ollamaSettings.topP);
+      console.log('[DEBUG-APP] Seed:', ollamaSettings.useFixedSeed ? ollamaSettings.seed : 'not fixed');
+      console.log('[DEBUG-APP] Context window:', ollamaSettings.numCtx);
+      console.log('[DEBUG-APP] Image data length:', imageBase64.length);
+      console.log('[DEBUG-APP] Full request structure:', 
+        JSON.stringify({
+          ...requestBody,
+          images: ['[BASE64_DATA_LENGTH: ' + imageBase64.length + ']'] // Don't log the actual base64 data
+        }, null, 2)
+      );
+      
+      // Make the request to the Ollama API
+      console.log(`[DEBUG-APP] Sending image description request to ${OLLAMA_BASE_URL}/api/generate for Page ${pageNumber}`);
+      
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DEBUG-APP] Ollama API error:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('[DEBUG-APP] Received response for Page', pageNumber, ':', data.response?.substring(0, 100) + '...');
+      return data.response || `[Image description for Page ${pageNumber}]`;
+    } catch (error) {
+      console.error('Error generating image description:', error);
+      return '[Error generating image description]';
+    }
+  };
+
   const handleExportWithOptions = (options: ExportOptions) => {
     if (qaPairs.length === 0) {
       alert('No Q&A to export!')
@@ -1534,6 +1961,310 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     // If options.data exists (from MNRL filtering), use that instead of qaPairs
     let dataToExport = options.data ? [...options.data] : [...qaPairs];
     
+    // Process images in context if needed
+    const contextColumnSelected = selectedColumns.some(col => col.field === 'context');
+    if (contextColumnSelected && options.imageExportType) {
+      // Check if we need to handle images
+      const hasImages = dataToExport.some((qa: QAPair) => 
+        typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+      );
+
+      if (hasImages) {
+        if (options.imageExportType === 'description') {
+          // Check if the model is available
+          checkOllamaConnection().then(async (isConnected) => {
+            if (!isConnected) {
+              alert('Cannot connect to Ollama. Please check your connection and try again.');
+              return;
+            }
+            
+            // Reset the abort controller to ensure previous cancelled operations don't affect us
+            if (abortControllerRef.current) {
+              abortControllerRef.current = null;
+            }
+            
+            const prompt = options.imageDescriptionPrompt || 'Describe this image in 3-5 sentences. Focus on the main elements, their relationships, and any text visible in the image.';
+            
+            // Create a processing indicator
+            let processingText = document.createElement('div');
+            processingText.style.position = 'fixed';
+            processingText.style.top = '50%';
+            processingText.style.left = '50%';
+            processingText.style.transform = 'translate(-50%, -50%)';
+            processingText.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            processingText.style.color = 'white';
+            processingText.style.padding = '20px';
+            processingText.style.borderRadius = '10px';
+            processingText.style.zIndex = '9999';
+            processingText.style.textAlign = 'center';
+            
+            // Find all QA pairs with images
+            const qaWithImages = dataToExport.filter((qa: QAPair) => 
+              typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+            );
+            
+            // Add processing text to the document
+            document.body.appendChild(processingText);
+            
+            // Set up shouldStop flag
+            let shouldStop = false;
+            let wasCancelled = false;
+            
+            // Add a cancel button
+            let cancelButton = document.createElement('button');
+            cancelButton.innerText = 'Cancel';
+            cancelButton.style.marginTop = '10px';
+            cancelButton.style.padding = '5px 10px';
+            cancelButton.style.backgroundColor = '#e53935';
+            cancelButton.style.color = 'white';
+            cancelButton.style.border = 'none';
+            cancelButton.style.borderRadius = '4px';
+            cancelButton.style.cursor = 'pointer';
+            cancelButton.onclick = () => {
+              shouldStop = true;
+              wasCancelled = true;
+              if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                // Create a new abort controller for subsequent operations
+                abortControllerRef.current = new AbortController();
+              }
+              // Remove the processing indicator
+              try {
+                document.body.removeChild(processingText);
+              } catch (e) {
+                console.error('Error removing processing indicator:', e);
+              }
+            };
+            processingText.appendChild(document.createElement('br'));
+            processingText.appendChild(cancelButton);
+            
+            try {
+              // Process each image one by one
+              const processedData = [...dataToExport];
+              for (let i = 0; i < qaWithImages.length; i++) {
+                if (shouldStop) break;
+                
+                const qa = qaWithImages[i];
+                if (typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')) {
+                  // Update processing text
+                  processingText.innerHTML = `Processing image ${i + 1} of ${qaWithImages.length}...<br>`;
+                  processingText.appendChild(cancelButton);
+                  
+                  try {
+                    // Generate description for this image
+                    const description = await generateImageDescription(qa.context, prompt);
+                    
+                    // Update the QA pair with the description
+                    const qaIndex = processedData.findIndex(item => item.id === qa.id);
+                    if (qaIndex !== -1) {
+                      processedData[qaIndex] = {
+                        ...qa,
+                        context: description
+                      };
+                    }
+                  } catch (error) {
+                    // Check if this was caused by cancellation
+                    if (shouldStop) {
+                      console.log('Image processing was cancelled');
+                      break;
+                    }
+                    
+                    console.error('Error processing image:', error);
+                    // If there's an error, use a placeholder
+                    const pageMatch = qa.context.match(/Page (\d+)/);
+                    const pageNumber = pageMatch ? pageMatch[1] : 'unknown';
+                    
+                    const qaIndex = processedData.findIndex(item => item.id === qa.id);
+                    if (qaIndex !== -1) {
+                      processedData[qaIndex] = {
+                        ...qa,
+                        context: `[Image description failed for Page ${pageNumber}]`
+                      };
+                    }
+                  }
+                }
+              }
+              
+              // Check if the operation was cancelled
+              if (!wasCancelled) {
+                // Remove processing indicator
+                try {
+                  document.body.removeChild(processingText);
+                } catch (e) {
+                  console.error('Error removing processing indicator:', e);
+                }
+                
+                // Continue with export process
+                processExport(processedData, options, selectedColumns);
+              }
+            } catch (error) {
+              console.error('Error in image description generation:', error);
+              
+              // Remove processing indicator if still present
+              try {
+                document.body.removeChild(processingText);
+              } catch (e) {
+                console.error('Error removing processing indicator:', e);
+              }
+              
+              // Show error to user
+              alert('An error occurred while generating image descriptions. Please try again.');
+            }
+          }).catch(error => {
+            console.error('Error checking Ollama connection:', error);
+            alert('Error connecting to Ollama. Please check your connection and try again.');
+          });
+          
+          // Return early as we'll handle the export in the Promise chain
+          return;
+        } else if (options.imageExportType === 'fullImage') {
+          // Extract images for zip file
+          const images: { id: string; base64Data: string; fileName: string; pageNumber: string }[] = [];
+          let imageIndex = 1;
+          
+          // First pass: collect all images
+          dataToExport.forEach((qa, index) => {
+            if (typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')) {
+              // Extract the base64 data
+              const imgMatch = qa.context.match(/src="data:image\/([^;]+);base64,([^"]+)"/);
+              
+              if (imgMatch) {
+                const imageType = imgMatch[1]; // e.g., "jpeg", "png"
+                const base64Data = imgMatch[2];
+                
+                // Extract page number if available
+                const pageMatch = qa.context.match(/Page (\d+)/);
+                const pageNumber = pageMatch ? pageMatch[1] : index.toString();
+                
+                // Create a filename for the image
+                const fileName = `image_${imageIndex}_page_${pageNumber}.${imageType}`;
+                
+                // Add to the images array with a unique identifier
+                const id = `img_${qa.id}_${imageIndex}`;
+                images.push({
+                  id,
+                  base64Data,
+                  fileName,
+                  pageNumber
+                });
+                
+                // Store the reference to this image in the qa pair for easy lookup later
+                (qa as any).tempImageId = id;
+                
+                imageIndex++;
+              }
+            }
+          });
+          
+          // Check if we found any images
+          if (images.length > 0) {
+            // Import the necessary libraries
+            import('jszip').then(async ({ default: JSZip }) => {
+              // Create a new zip file
+              const zip = new JSZip();
+              
+              // Create an 'images' folder in the zip
+              const imagesFolder = zip.folder('images');
+              
+              // Add each image to the 'images' folder in the zip
+              images.forEach(img => {
+                imagesFolder?.file(img.fileName, img.base64Data, { base64: true });
+              });
+              
+              // Now second pass: replace images in the data with placeholders
+              dataToExport = dataToExport.map((qa) => {
+                if (typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')) {
+                  // Use the temporary image ID we stored earlier
+                  const imageId = (qa as any).tempImageId;
+                  
+                  if (imageId) {
+                    // Find the corresponding image in our images array
+                    const imageMatch = images.find(img => img.id === imageId);
+                    
+                    if (imageMatch) {
+                      // Replace with a reference to the image in the zip file
+                      return {
+                        ...qa,
+                        context: `[Image images/${imageMatch.fileName} from zip file]`
+                      };
+                    }
+                  }
+                  
+                  // Fallback if we couldn't find the image
+                  return {
+                    ...qa,
+                    context: `[Image from Q&A pair ${qa.id}]`
+                  };
+                }
+                return qa;
+              });
+              
+              // Clean up temporary properties
+              dataToExport.forEach(qa => {
+                delete (qa as any).tempImageId;
+              });
+              
+              // Generate data file content (CSV or JSONL)
+              let fileName = '';
+              let fileContent = '';
+              
+              if (options.format === 'csv') {
+                // Generate CSV header with custom column names
+                fileContent = selectedColumns.map(col => col.customName).join(',') + '\n';
+                
+                // Generate CSV data
+                dataToExport.forEach((qa) => {
+                  const rowValues = selectedColumns.map(col => {
+                    const value = qa[col.field as keyof typeof qa] || '';
+                    // Escape quotes for CSV format
+                    return `"${String(value).replace(/"/g, '""')}"`;
+                  });
+                  fileContent += rowValues.join(',') + '\n';
+                });
+                
+                fileName = 'qa_dataset.csv';
+              } else {
+                // JSONL format
+                dataToExport.forEach((qa) => {
+                  const jsonObject: Record<string, any> = {};
+                  
+                  // Use custom names as keys
+                  selectedColumns.forEach(col => {
+                    jsonObject[col.customName] = qa[col.field as keyof typeof qa] || '';
+                  });
+                  
+                  fileContent += JSON.stringify(jsonObject) + '\n';
+                });
+                
+                fileName = 'qa_dataset.jsonl';
+              }
+              
+              // Add the data file to the root of the zip
+              zip.file(fileName, fileContent);
+              
+              // Generate the zip file
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              
+              // Save the zip file
+              saveAs(zipBlob, 'qa_dataset_with_images.zip');
+            }).catch(error => {
+              console.error('Error creating zip file:', error);
+              alert('Error creating zip file. Please try again or choose a different export option.');
+            });
+            
+            // Return early as we'll handle the export in the Promise chain
+            return;
+          }
+        }
+      }
+    }
+    
+    // If we're not handling images as a zip file, or there are no images, proceed with normal export
+    processExport(dataToExport, options, selectedColumns);
+  }
+  
+  // Helper function to process the actual export
+  const processExport = (dataToExport: QAPair[], options: ExportOptions, selectedColumns: any[]) => {
     // Shuffle the data if requested in advanced options
     if (options.shuffle) {
       // Fisher-Yates shuffle algorithm
@@ -1595,26 +2326,29 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   };
 
   // Helper to toggle cell expansion
-  const toggleCellExpansion = useCallback((rowId: number, columnType: string) => {
+  const toggleCellExpansion = useCallback((rowId: string | number, columnType: string) => {
     setExpandedCells(prev => {
       const newState = { ...prev };
-      // Check if any cell in this row is expanded
-      const isAnyExpanded = ['context', 'question', 'answer'].some(
-        colType => prev[`${rowId}-${colType}`]
-      );
+      const cellKey = `${rowId}-${columnType}`;
+      const isCurrentlyExpanded = !!prev[cellKey];
 
-      if (isAnyExpanded) {
-        // If any cell is expanded, collapse all cells in the row
-        ['context', 'question', 'answer'].forEach(colType => {
-          delete newState[`${rowId}-${colType}`];
-        });
+      // Find the QA pair to check if it's an image context
+      const qaPair = qaPairs.find(qa => qa.id === rowId);
+      const isImageContextCell = qaPair?.context.includes('<div class="pdf-page-image">') && columnType === 'context';
+
+      if (isCurrentlyExpanded) {
+        // If currently expanded, collapse it, UNLESS it's an image cell
+        if (!isImageContextCell) {
+          delete newState[cellKey];
+        } 
+        // If it IS an image cell, leave it expanded (clicking opens viewer, doesn't collapse)
       } else {
-        // If no cell is expanded, expand the clicked cell
-        newState[`${rowId}-${columnType}`] = true;
+        // If currently collapsed, expand it
+        newState[cellKey] = true;
       }
       return newState;
     });
-  }, []);
+  }, [qaPairs]); // Add qaPairs dependency
 
 
   // Add this helper for auto-scrolling
@@ -1648,7 +2382,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   const [registry] = useState(getSectionRegistry);
   const [instanceId] = useState(() => Symbol('instance-id'));
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reorderSection = useCallback(
     ({
@@ -1825,11 +2558,48 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     setViewMode(newMode);
   };
 
-  const handleUpdateQA = (updatedQA: QAPair) => {
-    setQaPairs(prev => prev.map(qa => qa.id === updatedQA.id ? updatedQA : qa));
+  const handleUpdateQA = (updatedQA: QAPair | QAPair[]) => {
+    // Check if this is a single QA pair update
+    if (!Array.isArray(updatedQA)) {
+      setQaPairs(prev => prev.map(qa => qa.id === updatedQA.id ? updatedQA : qa));
+    } else {
+      // This is a bulk update from image cropping in FlashcardView
+      // Add new QA pairs and replace the existing one if needed
+      setQaPairs(prev => {
+        const newQAPairs = [...prev];
+        
+        // Find the QA pair to update (should be first in the array)
+        const firstQA = updatedQA[0];
+        const existingIndex = newQAPairs.findIndex(qa => qa.id === firstQA.id);
+        
+        if (existingIndex !== -1) {
+          // Replace the existing QA
+          newQAPairs[existingIndex] = firstQA;
+          
+          // Add the rest of the QA pairs after this one
+          if (updatedQA.length > 1) {
+            newQAPairs.splice(existingIndex + 1, 0, ...updatedQA.slice(1));
+          }
+        } else {
+          // If not found (shouldn't happen), just append all
+          newQAPairs.push(...updatedQA);
+        }
+        
+        return newQAPairs;
+      });
+      
+      // If we're in flashcard view, move to the first new card
+      if (isFlashcardView(viewMode) && updatedQA.length > 0) {
+        const firstNewQA = updatedQA[0];
+        const newIndex = qaPairs.findIndex(qa => qa.id === firstNewQA.id);
+        if (newIndex !== -1) {
+          setCurrentIndex(newIndex);
+        }
+      }
+    }
   };
 
-  const handleSingleCardGenerate = async (cardId: number) => {
+  const handleSingleCardGenerate = async (cardId: string | number) => {
     if (isGenerating) {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
@@ -1952,7 +2722,9 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
 
   // Add this new function to handle creating empty rows/cards
   const handleAddEmpty = () => {
-    const newId = qaPairs.length > 0 ? Math.max(...qaPairs.map(qa => qa.id)) + 1 : 1;
+    const newId = qaPairs.length > 0 
+      ? Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1 
+      : 1;
     const newQA: QAPair = {
       id: newId,
       context: '',
@@ -2011,7 +2783,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       const currentQA = qaPairs[currentIndex];
       if (!currentQA) return;
 
-      const newId = Math.max(...qaPairs.map(qa => qa.id)) + 1;
+      const newId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1;
       const duplicatedQA: QAPair = {
         ...currentQA,
         id: newId,
@@ -2028,7 +2800,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       const selectedQAs = qaPairs.filter(qa => qa.selected);
       if (selectedQAs.length === 0) return;
 
-      let nextId = Math.max(...qaPairs.map(qa => qa.id)) + 1;
+      let nextId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id))) + 1;
       const newQAPairs = [...qaPairs];
 
       // Sort selected QAs by their position in descending order
@@ -2057,7 +2829,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
   };
 
   // Add new handlers for single card generation
-  const handleSingleCardGenerateQuestion = async (cardId: number) => {
+  const handleSingleCardGenerateQuestion = async (cardId: string | number) => {
     if (isGenerating) {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
@@ -2099,7 +2871,7 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
     }
   };
 
-  const handleSingleCardGenerateAnswer = async (cardId: number) => {
+  const handleSingleCardGenerateAnswer = async (cardId: string | number) => {
     if (isGenerating) {
       setShouldStopGeneration(true);
       if (abortControllerRef.current) {
@@ -2145,6 +2917,362 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
       }
     }
   };
+
+  // Add a new function to handle the import options
+  const handleImportWithOptions = async (options: ImportOptions) => {
+    if (options.importType === 'fileOnly') {
+      // Use the existing function for single file import
+      if (options.file) {
+        handleImportCSV(options.file);
+      }
+    } else if (options.importType === 'fileAndImages') {
+      // We need to handle both the file and the image folder
+      if (!options.file) {
+        alert('Please select a file to import.');
+        return;
+      }
+      
+      if (!options.imageFolder) {
+        alert('Please select an image folder.');
+        return;
+      }
+      
+      try {
+        // Read and parse the data file
+        const text = await options.file.text();
+        
+        // Determine if it's CSV or JSON
+        const isJSON = options.file.name.toLowerCase().endsWith('.json') || 
+                       options.file.name.toLowerCase().endsWith('.jsonl');
+        
+        let qaPairsData: QAPair[] = [];
+        
+        if (isJSON) {
+          // Handle JSON/JSONL format
+          if (options.file.name.toLowerCase().endsWith('.jsonl')) {
+            // JSONL: one JSON object per line
+            const lines = text.split('\n').filter(line => line.trim());
+            qaPairsData = lines.map((line, idx) => {
+              const obj = JSON.parse(line);
+              return {
+                id: idx + 1,
+                context: obj.context || '',
+                question: obj.question || '',
+                answer: obj.answer || '',
+                selected: false,
+                generating: {
+                  question: false,
+                  answer: false
+                }
+              };
+            });
+          } else {
+            // Regular JSON
+            const jsonData = JSON.parse(text);
+            qaPairsData = Array.isArray(jsonData) ? jsonData.map((obj, idx) => ({
+              id: idx + 1,
+              context: obj.context || '',
+              question: obj.question || '',
+              answer: obj.answer || '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            })) : [];
+          }
+        } else {
+          // Define an internal parseCSV function if it doesn't already exist in the scope
+          // This ensures we have a parseCSV function regardless of the surrounding code
+          const parseCSVInternal = (text: string): string[][] => {
+            const rows: string[][] = [];
+            let currentRow: string[] = [];
+            let currentField = '';
+            let insideQuotes = false;
+            
+            for (let i = 0; i < text.length; i++) {
+              const char = text[i];
+              const nextChar = text[i + 1];
+              
+              if (char === '"') {
+                if (insideQuotes && nextChar === '"') {
+                  currentField += '"';
+                  i++; // Skip next quote
+                } else {
+                  insideQuotes = !insideQuotes;
+                }
+              } else if (char === ',' && !insideQuotes) {
+                currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+                currentField = '';
+              } else if ((char === '\n' || char === '\r\n' || char === '\r') && !insideQuotes) {
+                currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+                if (currentRow.some(field => field.length > 0)) {
+                  rows.push([...currentRow]); // Create a new array to avoid reference issues
+                }
+                currentRow = [];
+                currentField = '';
+              } else {
+                currentField += char;
+              }
+            }
+            
+            // Handle the last row if there's no final newline
+            if (currentField || currentRow.length > 0) {
+              currentRow.push(currentField.replace(/[\r\n]+/g, ' ').trim());
+              if (currentRow.some(field => field.length > 0)) {
+                rows.push([...currentRow]); // Create a new array to avoid reference issues
+              }
+            }
+            
+            return rows;
+          };
+
+          // Use our internal parseCSV function
+          const rows = parseCSVInternal(text);
+          
+          // Validate CSV format
+          if (rows.length < 2) {
+            throw new Error('CSV must have at least a header row and one data row');
+          }
+          
+          const headers = rows[0].map((h: string) => h.toLowerCase().trim());
+          
+          if (!headers.includes('context') || !headers.includes('question') || !headers.includes('answer')) {
+            throw new Error('CSV must have "context", "question", and "answer" columns');
+          }
+          
+          const contextIndex = headers.indexOf('context');
+          const questionIndex = headers.indexOf('question');
+          const answerIndex = headers.indexOf('answer');
+          
+          // Convert rows to QAPairs
+          qaPairsData = rows.slice(1).map((row: string[], idx: number) => ({
+            id: idx + 1,
+            context: row[contextIndex] || '',
+            question: row[questionIndex] || '',
+            answer: row[answerIndex] || '',
+            selected: false,
+            generating: {
+              question: false,
+              answer: false
+            }
+          }));
+        }
+        
+        // Process image placeholders
+        const processedQAPairs = await processImagePlaceholders(qaPairsData, options.imageFolder);
+        
+        // Check if any of the processed QA pairs contain image data
+        const hasImages = processedQAPairs.some((qa: QAPair) => 
+          typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+        );
+        
+        // If images are found, set the processImages flag to true
+        if (hasImages) {
+          setProcessImages(true);
+        }
+        
+        // Replace or append the data
+        if (qaPairs.length > 0) {
+          // Show confirmation dialog
+          setPendingImportFile(options.file);
+          setShowImportDialog(true);
+          
+          // Store the processed data for later use when the user confirms
+          (options.file as any).processedQAPairs = processedQAPairs;
+        } else {
+          // No existing data, just set the processed data
+          setQaPairs(processedQAPairs);
+        }
+        
+      } catch (err) {
+        alert(`Error importing data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        console.error('Import error:', err);
+      }
+    }
+  };
+
+  // Add a new function to process image placeholders
+  const processImagePlaceholders = async (data: QAPair[], folderHandle: FileSystemDirectoryHandle): Promise<QAPair[]> => {
+    // Process each QA pair to look for image placeholders
+    const processedData = [...data];
+    
+    for (let i = 0; i < processedData.length; i++) {
+      const pair = processedData[i];
+      
+      // Check if the context contains an image placeholder
+      const imagePlaceholderRegex = /\[Image\s+([^\]]+)\s+from\s+zip\s+file\]/g;
+      
+      if (typeof pair.context === 'string' && pair.context.match(imagePlaceholderRegex)) {
+        // Replace all image placeholders
+        pair.context = await replaceImagePlaceholders(pair.context, folderHandle);
+      }
+    }
+    
+    return processedData;
+  };
+
+  // Function to replace image placeholders with actual images
+  const replaceImagePlaceholders = async (text: string, folderHandle: FileSystemDirectoryHandle): Promise<string> => {
+    const imagePlaceholderRegex = /\[Image\s+([^\]]+)\s+from\s+zip\s+file\]/g;
+    let result = text;
+    const matches = Array.from(text.matchAll(imagePlaceholderRegex));
+    
+    for (const match of matches) {
+      const placeholder = match[0];
+      const imagePath = match[1].trim();
+      
+      try {
+        // Extract just the filename from the path
+        const pathParts = imagePath.split('/');
+        const fileName = pathParts[pathParts.length - 1];
+        
+        // Try to get the file from the folder
+        let imageFile: File | null = null;
+        
+        try {
+          // First try with the exact path
+          const fileHandle = await getFileFromPath(folderHandle, imagePath);
+          if (fileHandle) {
+            imageFile = await fileHandle.getFile();
+          }
+        } catch (e) {
+          console.log(`Couldn't find exact path ${imagePath}, trying with filename only`);
+        }
+        
+        // If not found with exact path, try just the filename
+        if (!imageFile) {
+          try {
+            // Directly try to get the file by name
+            const fileHandle = await folderHandle.getFileHandle(fileName);
+            if (fileHandle) {
+              imageFile = await fileHandle.getFile();
+            }
+          } catch (e) {
+            console.error(`Error getting file ${fileName}:`, e);
+          }
+        }
+        
+        if (imageFile) {
+          // Read the image file and convert to base64
+          const arrayBuffer = await imageFile.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce(
+              (data, byte) => data + String.fromCharCode(byte),
+              ''
+            )
+          );
+          
+          // Create the image HTML without the Page label
+          const mimeType = imageFile.type || 'image/png';
+          const imageHtml = `<div class="pdf-page-image">
+            <img src="data:${mimeType};base64,${base64}" alt="${fileName}" style="max-width: 100%;">
+          </div>`;
+          
+          // Replace the placeholder with the image HTML
+          result = result.replace(placeholder, imageHtml);
+          
+          // Remove the code that adds to extractedImages
+        } else {
+          console.warn(`Image file not found: ${imagePath}`);
+        }
+      } catch (error) {
+        console.error(`Error processing image ${imagePath}:`, error);
+      }
+    }
+    
+    return result;
+  };
+
+  // Helper function to get a file from a path inside a directory handle
+  const getFileFromPath = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<FileSystemFileHandle | null> => {
+    const parts = path.split('/').filter(part => part.length > 0);
+    let currentHandle: FileSystemDirectoryHandle = rootHandle;
+    
+    // Navigate through directories
+    for (let i = 0; i < parts.length - 1; i++) {
+      try {
+        const nextHandle = await currentHandle.getDirectoryHandle(parts[i]);
+        currentHandle = nextHandle;
+      } catch (e) {
+        console.warn(`Directory not found: ${parts[i]}`);
+        return null;
+      }
+    }
+    
+    // Get the file
+    try {
+      return await currentHandle.getFileHandle(parts[parts.length - 1]);
+    } catch (e) {
+      console.warn(`File not found: ${parts[parts.length - 1]}`);
+      return null;
+    }
+  };
+
+  // Update the ImportConfirmationDialog handlers to work with processed QA pairs
+  <ImportConfirmationDialog 
+    open={showImportDialog}
+    onClose={() => {
+      setShowImportDialog(false);
+      setPendingImportFile(null);
+    }}
+    onExport={handleExportCSV}
+    onReplace={(file: File | null) => {
+      // First process the file, then close dialog
+      if (file) {
+        // Check if we have already processed data
+        if ((file as any).processedQAPairs) {
+          const processedData = (file as any).processedQAPairs;
+          
+          // Check if any of the processed QA pairs contain image data
+          const hasImages = processedData.some((qa: QAPair) => 
+            typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+          );
+          
+          // If images are found, set the processImages flag to true
+          if (hasImages) {
+            setProcessImages(true);
+          }
+          
+          setQaPairs(processedData);
+        } else {
+          // Use the existing handler
+          handleImportCSV(file, 'replace', true);
+        }
+      }
+      // Close dialog after processing
+      setShowImportDialog(false);
+      setPendingImportFile(null);
+    }}
+    onAppend={(file: File | null) => {
+      // First process the file, then close dialog
+      if (file) {
+        // Check if we have already processed data
+        if ((file as any).processedQAPairs) {
+          const processedData = (file as any).processedQAPairs;
+          
+          // Check if any of the processed QA pairs contain image data
+          const hasImages = processedData.some((qa: QAPair) => 
+            typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+          );
+          
+          // If images are found, set the processImages flag to true
+          if (hasImages) {
+            setProcessImages(true);
+          }
+          
+          setQaPairs(prev => [...prev, ...processedData]);
+        } else {
+          // Use the existing handler
+          handleImportCSV(file, 'append', true);
+        }
+      }
+      // Close dialog after processing
+      setShowImportDialog(false);
+      setPendingImportFile(null);
+    }}
+    pendingImportFile={pendingImportFile}
+  />
   //------------------------------------------------------------------------------------
   //  Render UI
   //------------------------------------------------------------------------------------
@@ -2380,29 +3508,85 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         {/* Render section content based on section.id */}
                         {section.id === 'section-upload' && (
                           <Box sx={{ p: 1.5, pt: 1 }}>
+                            <Box sx={{ mb: 2 }}>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                mb: 1 
+                              }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                    Document
+                                  </Typography>
+                                  <Tooltip title="Upload a document (PDF, DOCX, TXT, CSV, JSONL) to generate Q&A pairs from." placement="right">
+                                    <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                      <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              </Box>
+                              
+                              {/* Add file selection display with checkbox when a file is uploaded */}
+                              {fileName && (
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  mb: 1.5,
+                                  p: 1,
+                                  borderRadius: '6px',
+                                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+                                }}>
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontSize: '0.875rem',
+                                      color: theme.palette.text.primary,
+                                      flexGrow: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {fileName}
+                                  </Typography>
+                                </Box>
+                              )}
+                              
+                              <Button
+                                variant="outlined"
+                                component="label"
+                                fullWidth
+                                startIcon={<UploadFileIcon />}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 500,
+                                  borderRadius: '8px',
+                                  py: 1,
+                                  borderColor: theme.palette.mode === 'dark' 
+                                    ? alpha(theme.palette.primary.main, 0.5)
+                                    : alpha(theme.palette.primary.main, 0.3),
+                                  color: theme.palette.primary.main,
+                                  '&:hover': {
+                                    borderColor: theme.palette.primary.main,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.05)
+                                  }
+                                }}
+                              >
+                                Upload Document
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept=".pdf,.docx,.txt,.md,.csv,.tsv,.jsonl,.json"
+                                  onChange={handleFileUpload}
+                                />
+                              </Button>
+                            </Box>
                             <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
                               Accepts .txt, .csv, .pdf, .docx, .md, .jsonl, .json
                             </Typography>
-                            <Button 
-                              variant="contained" 
-                              component="label" 
-                              fullWidth
-                              startIcon={<UploadFileIcon />}
-                              color="primary"
-                            >
-                              Choose File
-                              <input
-                                type="file"
-                                accept=".pdf,.docx,.csv,.txt,.md,.jsonl,.json"
-                                hidden
-                                onChange={handleFileUpload}
-                              />
-                            </Button>
-                            {fileName && (
-                              <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
-                                Selected: {fileName}
-                              </Typography>
-                            )}
+                            
+                            {/* Process Images checkbox has been moved to the chunking section */}
                           </Box>
                         )}
                         {section.id === 'section-modelSettings' && (
@@ -2585,6 +3769,13 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                               }}
                               initialQuestionPrompt={promptQuestion}
                               initialAnswerPrompt={promptAnswer}
+                              isProcessingImages={processImages}
+                              onImagePromptChange={(questionPrompt, answerPrompt) => {
+                                setImagePromptQuestion(questionPrompt);
+                                setImagePromptAnswer(answerPrompt);
+                              }}
+                              initialImageQuestionPrompt={imagePromptQuestion}
+                              initialImageAnswerPrompt={imagePromptAnswer}
                             />
                           </Box>
                         )}
@@ -2738,6 +3929,39 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                                     }
                                   }}
                                 />
+                              </Box>
+                            )}
+
+                            {/* Process Images checkbox moved to chunking section */}
+                            {fileName && fileName.toLowerCase().endsWith('.pdf') && (
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      checked={processImages}
+                                      onChange={(e) => setProcessImages(e.target.checked)}
+                                      sx={{
+                                        '&.Mui-checked': {
+                                          color: theme.palette.primary.main,
+                                        }
+                                      }}
+                                    />
+                                  }
+                                  label={
+                                    <Typography sx={{ 
+                                      fontSize: '0.875rem',
+                                      fontWeight: 500,
+                                      color: theme.palette.text.secondary
+                                    }}>
+                                      Process Images
+                                    </Typography>
+                                  }
+                                />
+                                <Tooltip title="Extract images from your document. The tool will identify and process as many images as possible, though some might be missed. Pages containing images will be fully extracted, allowing you to select specific regions to keep. You may need to remove some extra content after extraction." placement="right">
+                                  <IconButton size="small" sx={{ ml: 0.5, opacity: 0.7 }}>
+                                    <HelpOutlineIcon sx={{ fontSize: '0.875rem' }} />
+                                  </IconButton>
+                                </Tooltip>
                               </Box>
                             )}
 
@@ -3459,7 +4683,8 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         size="small"
                         variant="text"
                         onClick={() => {
-                          fileInputRef.current?.click();
+                          // Show import options dialog instead of directly opening file picker
+                          setShowImportOptionsDialog(true);
                         }}
                         startIcon={<UploadIcon />}
                         sx={{
@@ -3479,13 +4704,6 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                         }}
                       >
                         Import
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".csv"
-                          style={{ display: 'none' }}
-                          onChange={handleImportCSV}
-                        />
                       </Button>
                     </Tooltip>
                     <Tooltip title="Export all Q&A pairs with custom format options (CSV or JSONL)">
@@ -3558,14 +4776,10 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
                   generationProgress={generationProgress}
                   onPageChange={(newPage) => {
                     setPage(newPage);
-                    // Reset expanded cells when changing pages
-                    setExpandedCells({});
                   }}
                   onRowsPerPageChange={(newRowsPerPage) => {
                     setRowsPerPage(newRowsPerPage);
                     setPage(0);
-                    // Reset expanded cells when changing rows per page
-                    setExpandedCells({});
                   }}
                   onToggleCellExpansion={toggleCellExpansion}
                   onQAPairChange={setQaPairs}
@@ -3633,10 +4847,25 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         onReplace={(file: File | null) => {
           // First process the file, then close dialog
           if (file) {
-            // Use a copy to ensure we don't lose the file reference
-            const fileCopy = file;
-            // Pass true for fromDialog parameter to prevent showing dialog again
-            handleImportCSV(fileCopy, 'replace', true);
+            // Check if we have already processed data
+            if ((file as any).processedQAPairs) {
+              const processedData = (file as any).processedQAPairs;
+              
+              // Check if any of the processed QA pairs contain image data
+              const hasImages = processedData.some((qa: QAPair) => 
+                typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+              );
+              
+              // If images are found, set the processImages flag to true
+              if (hasImages) {
+                setProcessImages(true);
+              }
+              
+              setQaPairs(processedData);
+            } else {
+              // Use the existing handler
+              handleImportCSV(file, 'replace', true);
+            }
           }
           // Close dialog after processing
           setShowImportDialog(false);
@@ -3645,10 +4874,25 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         onAppend={(file: File | null) => {
           // First process the file, then close dialog
           if (file) {
-            // Use a copy to ensure we don't lose the file reference
-            const fileCopy = file;
-            // Pass true for fromDialog parameter to prevent showing dialog again
-            handleImportCSV(fileCopy, 'append', true);
+            // Check if we have already processed data
+            if ((file as any).processedQAPairs) {
+              const processedData = (file as any).processedQAPairs;
+              
+              // Check if any of the processed QA pairs contain image data
+              const hasImages = processedData.some((qa: QAPair) => 
+                typeof qa.context === 'string' && qa.context.includes('<div class="pdf-page-image">')
+              );
+              
+              // If images are found, set the processImages flag to true
+              if (hasImages) {
+                setProcessImages(true);
+              }
+              
+              setQaPairs(prev => [...prev, ...processedData]);
+            } else {
+              // Use the existing handler
+              handleImportCSV(file, 'append', true);
+            }
           }
           // Close dialog after processing
           setShowImportDialog(false);
@@ -3675,25 +4919,110 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
               answer: false
             }
           }));
+          
+          // If originalFileData exists but we're replacing everything without processing images,
+          // we should create a backup and keep it in state
+          if (originalFileData && !processImages) {
+            // We're preserving the buffer but not processing images immediately
+            console.log("Preserving PDF buffer for potential future image processing");
+          }
+          
           setQaPairs(newPairs);
+          
+          // Auto-expand cells with images
+          const newExpandedCells: Record<string, boolean> = {};
+          newPairs.forEach((pair) => {
+            if (pair.context.includes('<div class="pdf-page-image">')) {
+              newExpandedCells[`${pair.id}-context`] = true;
+            }
+          });
+          setExpandedCells(newExpandedCells);
+          
           setShowChunkingDialog(false);
           setPendingChunks([]);
         }}
         onAppend={(chunks: string[]) => {
-          // Append new chunks to existing ones
-          const lastId = Math.max(...qaPairs.map(qa => qa.id));
-          const newPairs = chunks.map((chunk, idx) => ({
-            id: lastId + idx + 1,
-            context: chunk,
-            question: '',
-            answer: '',
-            selected: false,
-            generating: {
-              question: false,
-              answer: false
+          // Extract new text chunks (non-image chunks)
+          const newTextChunks = chunks.filter(chunk => !chunk.includes('<div class="pdf-page-image">'));
+          
+          // Note: We identify existing image chunks but don't need to store them in a variable
+          // qaPairs.filter(qa => qa.context.includes('<div class="pdf-page-image">'));
+          
+          // If processImages is enabled and there are new image chunks in the pending chunks,
+          // use those instead of the existing ones
+          const newImageChunks = processImages 
+            ? chunks.filter(chunk => chunk.includes('<div class="pdf-page-image">'))
+            : [];
+          
+          // For append mode, either:
+          // 1. If processImages is enabled, we need to remove all existing image chunks and use the new ones
+          // 2. If processImages is disabled, we need to keep the existing image chunks and only append new text chunks
+          if (processImages && newImageChunks.length > 0) {
+            // Remove existing image QA pairs
+            const nonImageQaPairs = qaPairs.filter(qa => !qa.context.includes('<div class="pdf-page-image">'));
+            
+            // Create new QA pairs for the image chunks
+            const lastId = nonImageQaPairs.length > 0 
+              ? Math.max(...nonImageQaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : qa.id))
+              : 0;
+              
+            const newImagePairs = newImageChunks.map((chunk, idx) => ({
+              id: lastId + idx + 1,
+              context: chunk,
+              question: '',
+              answer: '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            }));
+            
+            // Create new QA pairs for the text chunks
+            const newTextPairs = newTextChunks.map((chunk, idx) => ({
+              id: lastId + newImageChunks.length + idx + 1,
+              context: chunk,
+              question: '',
+              answer: '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            }));
+            
+            // Combine everything: existing non-image QA pairs, new image QA pairs, new text QA pairs
+            setQaPairs([...nonImageQaPairs, ...newImagePairs, ...newTextPairs]);
+          } else {
+            // When not processing images, just append the new text chunks
+            const lastId = Math.max(...qaPairs.map(qa => typeof qa.id === 'string' ? parseInt(qa.id, 10) : Number(qa.id)));
+            
+            const newTextPairs = newTextChunks.map((chunk, idx) => ({
+              id: lastId + idx + 1,
+              context: chunk,
+              question: '',
+              answer: '',
+              selected: false,
+              generating: {
+                question: false,
+                answer: false
+              }
+            }));
+            
+            setQaPairs(prev => [...prev, ...newTextPairs]);
+          }
+          
+          // Auto-expand cells with images
+          const newExpandedCells: Record<string, boolean> = { ...expandedCells };
+          
+          // Always make sure image cells are expanded
+          qaPairs.forEach((pair) => {
+            if (pair.context.includes('<div class="pdf-page-image">')) {
+              newExpandedCells[`${pair.id}-context`] = true;
             }
-          }));
-          setQaPairs(prev => [...prev, ...newPairs]);
+          });
+          
+          setExpandedCells(newExpandedCells);
           setShowChunkingDialog(false);
           setPendingChunks([]);
         }}
@@ -3707,6 +5036,93 @@ const App: React.FC<AppProps> = ({ onThemeChange }): React.ReactElement => {
         onShuffle={shuffleQAPairs}
         qaPairs={qaPairs}
         ollamaSettings={ollamaSettings}
+      />
+
+      {/* Extracted Images Display */}
+      {extractedImages.length > 0 && (
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            mt: 4, 
+            p: 3, 
+            borderRadius: '12px',
+            backgroundColor: theme.palette.background.paper
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Extracted Images ({extractedImages.length})
+            </Typography>
+            <Button 
+              onClick={() => setExtractedImages([])} 
+              color="error" 
+              size="small" 
+              startIcon={<DeleteIcon />}
+            >
+              Clear Images
+            </Button>
+          </Box>
+          
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            {extractedImages.map((img, index) => (
+              <Box 
+                key={index} 
+                sx={{ 
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  width: 200,
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                <img 
+                  src={img.dataUrl} 
+                  alt={img.name} 
+                  style={{ 
+                    width: '100%', 
+                    height: 'auto', 
+                    maxHeight: 200,
+                    objectFit: 'contain' 
+                  }} 
+                />
+                <Box sx={{ p: 1 }}>
+                  <Typography variant="caption" noWrap sx={{ display: 'block' }}>
+                    {img.name}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                    <Button 
+                      size="small" 
+                      variant="outlined" 
+                      fullWidth
+                      onClick={() => {
+                        // Create a temporary link and trigger download
+                        const link = document.createElement('a');
+                        link.href = img.dataUrl;
+                        link.download = img.name;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                    >
+                      Download
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Paper>
+      )}
+
+      {/* Main Content Sections */}
+      <Box sx={{ mt: 4 }}>
+        {/* Add your existing content here */}
+      </Box>
+      <ImportOptionsDialog
+        open={showImportOptionsDialog}
+        onClose={() => setShowImportOptionsDialog(false)}
+        onImport={handleImportWithOptions}
       />
     </Box>
   );

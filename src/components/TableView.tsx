@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -21,6 +21,10 @@ import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 // Import the types from the types folder
 import { QAPair, GenerationType, GenerationProgress } from '../types';
 
+// Import the ImageViewerDialog
+import ImageViewerDialog from './dialogs/ImageViewerDialog';
+import { Region } from './ImageRegionSelector';
+
 interface TableViewProps {
   qaPairs: QAPair[];
   page: number;
@@ -34,9 +38,9 @@ interface TableViewProps {
   // Callbacks
   onPageChange: (newPage: number) => void;
   onRowsPerPageChange: (newRowsPerPage: number) => void;
-  onToggleCellExpansion: (rowId: number, columnType: string) => void;
+  onToggleCellExpansion: (rowId: string | number, columnType: string) => void;
   onQAPairChange: (updatedQAPairs: QAPair[]) => void;
-  onSelectRow: (rowId: number, selected: boolean) => void;
+  onSelectRow: (rowId: string | number, selected: boolean) => void;
   onSelectAllRows: (selected: boolean) => void;
   isCellGenerating: (qa: QAPair, columnType: string) => boolean;
 }
@@ -57,6 +61,14 @@ const TableView: React.FC<TableViewProps> = ({
   isCellGenerating
 }) => {
   const theme = useTheme();
+  
+  // Add state for image viewer
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [viewerImageUrl, setViewerImageUrl] = useState('');
+  const [viewerPageNumber, setViewerPageNumber] = useState(0);
+  
+  // Track image elements with refs
+  const imageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const handlePageChange = (_: unknown, newPage: number) => {
     onPageChange(newPage);
@@ -70,15 +82,170 @@ const TableView: React.FC<TableViewProps> = ({
     onSelectAllRows(event.target.checked);
   };
 
-  const handleSelectRow = (id: number, checked: boolean) => {
+  const handleSelectRow = (id: string | number, checked: boolean) => {
     onSelectRow(id, checked);
   };
 
-  const handleCellChange = (id: number, field: string, value: string) => {
+  const handleCellChange = (id: string | number, field: string, value: string) => {
     const updatedQAPairs = qaPairs.map(qa => 
       qa.id === id ? { ...qa, [field]: value } : qa
     );
     onQAPairChange(updatedQAPairs);
+  };
+
+  // Helper to extract image info from HTML content
+  const extractImageInfo = (htmlContent: string): { url: string; pageNumber: number } | null => {
+    // Simple regex to extract image source
+    const imgSrcMatch = htmlContent.match(/src="([^"]+)"/);
+    
+    // Try to match both formats: "PDF Page X" and "Page X"
+    // Also support: "Page X (Region Y)" format for cropped regions
+    const pageNumberMatch = htmlContent.match(/(?:PDF Page|Page) (\d+)(?:\s*\(Region \d+\))?/);
+    
+    if (imgSrcMatch && pageNumberMatch) {
+      return {
+        url: imgSrcMatch[1],
+        pageNumber: parseInt(pageNumberMatch[1], 10)
+      };
+    }
+    
+    return null;
+  };
+  
+  // Add this helper function to attach click handlers to all images in a container
+  const attachImageClickHandlers = useCallback((container: HTMLElement, rowId: string | number, columnType: string) => {
+    // Find all images in the container
+    const images = container.querySelectorAll('img');
+    
+    // Store cleanup functions
+    const cleanupFunctions: (() => void)[] = [];
+    
+    // Attach click handler to each image
+    images.forEach(img => {
+      const clickHandler = (e: MouseEvent) => {
+        e.stopPropagation();
+        
+        // Get the image URL
+        const imageUrl = (img as HTMLImageElement).src;
+        
+        // Try to extract page number from parent elements
+        let pageNumber = 1;
+        const pageNumberElement = img.closest('.pdf-page-image')?.querySelector('.page-number');
+        if (pageNumberElement) {
+          // Handle both formats: "Page X" and "Page X (Region Y)"
+          const pageMatch = pageNumberElement.textContent?.match(/Page (\d+)(?:\s*\(Region \d+\))?/);
+          if (pageMatch) {
+            pageNumber = parseInt(pageMatch[1], 10);
+          }
+        }
+        
+        // Open the image viewer
+        setViewerImageUrl(imageUrl);
+        setViewerPageNumber(pageNumber);
+        setImageViewerOpen(true);
+        
+        // Expand the cell
+        onToggleCellExpansion(rowId, columnType);
+      };
+      
+      // Add event listener
+      img.addEventListener('click', clickHandler);
+      
+      // Add cleanup function
+      cleanupFunctions.push(() => {
+        img.removeEventListener('click', clickHandler);
+      });
+    });
+    
+    return cleanupFunctions;
+  }, [setViewerImageUrl, setViewerPageNumber, setImageViewerOpen, onToggleCellExpansion]);
+
+  // Update the useEffect to use the new helper function
+  useEffect(() => {
+    // Store all cleanup functions
+    const allCleanupFunctions: (() => void)[] = [];
+    
+    // Process each visible row
+    qaPairs
+      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+      .forEach(qa => {
+        // Find all context cells with HTML content
+        const contextContent = qa.context as string;
+        if (typeof contextContent === 'string' && contextContent.includes('<div class="pdf-page-image">')) {
+          // Find the cell in the DOM
+          const cellElement = document.querySelector(`[data-qa-id="${qa.id}"][data-column-type="context"]`);
+          if (cellElement) {
+            // Attach click handlers to all images in this cell
+            const cleanups = attachImageClickHandlers(cellElement as HTMLElement, qa.id, 'context');
+            allCleanupFunctions.push(...cleanups);
+          }
+        }
+      });
+    
+    // Return cleanup function
+    return () => {
+      allCleanupFunctions.forEach(cleanup => cleanup());
+    };
+  }, [page, rowsPerPage, qaPairs, attachImageClickHandlers]);
+
+  // Function to handle selected regions from the image viewer
+  const handleImageRegionSelect = (regions: Region[]) => {
+    // Only process if there are new regions
+    if (regions.length === 0) return;
+    
+    // Create new QA pairs for each region
+    const newQAPairs: QAPair[] = regions.map((region, index) => {
+      // Get the bare base64 data from the dataURL format (remove the "data:image/jpeg;base64," prefix)
+      const base64Data = region.imageData.split('base64,')[1];
+      
+      // Create clean HTML content for the image region with better styling
+      // Make sure we don't include any extra tags or styling that might confuse the model
+      const imageHtml = `<div class="pdf-page-image">
+        <div class="page-number" style="display: none;">Page ${viewerPageNumber} (Region ${index + 1})</div>
+        <img 
+          src="data:image/jpeg;base64,${base64Data}" 
+          alt="Selected region from page ${viewerPageNumber}"
+          style="display: block; margin: 0 auto; max-width: 100%;"
+          data-page="${viewerPageNumber}" 
+          data-region="${index + 1}"
+        />
+      </div>`;
+      
+      // Add the region as a new chunk to the QA list
+      return {
+        id: Date.now() + Math.floor(Math.random() * 1000) + index, // Generate unique numeric ID
+        context: imageHtml,
+        question: '',
+        answer: '',
+        sources: `Page ${viewerPageNumber} (Region ${index + 1})`,
+        selected: false
+      };
+    });
+    
+    // Add all new regions to the QA list - adding at the beginning for better visibility
+    onQAPairChange([...newQAPairs, ...qaPairs]);
+    
+    // Auto-expand the cells containing the new regions
+    setTimeout(() => {
+      // Create a new expanded cells object
+      const newExpandedCells = { ...expandedCells };
+      
+      // Set each new region's cell to be expanded
+      newQAPairs.forEach(pair => {
+        newExpandedCells[`${pair.id}-context`] = true;
+      });
+      
+      // Update expanded cells
+      onToggleCellExpansion(newQAPairs[0].id, 'context');
+    }, 100);
+    
+    // Show confirmation
+    alert(`Added ${regions.length} image region${regions.length > 1 ? 's' : ''} to the table. Click on the thumbnails to view them full size.`);
+    
+    // Close the image viewer after a short delay to allow user to see confirmation
+    setTimeout(() => {
+      setImageViewerOpen(false);
+    }, 500);
   };
 
   return (
@@ -107,12 +274,15 @@ const TableView: React.FC<TableViewProps> = ({
       }
     }}>
       <Table size="small" stickyHeader sx={{
+        tableLayout: 'fixed', // Force equal column widths
         '& .MuiTableCell-root': {
           borderBottom: '1px solid',
           borderColor: theme.palette.divider,
-          padding: '12px 16px',
+          padding: '8px 12px',
           fontSize: '0.875rem',
           transition: 'all 0.2s ease',
+          width: 'calc(100% / 3)', // Exactly one-third width
+          textAlign: 'left',
         },
         '& .MuiTableHead-root .MuiTableCell-root': {
           fontWeight: 600,
@@ -130,9 +300,9 @@ const TableView: React.FC<TableViewProps> = ({
           padding: '0 16px', // Adjust padding
           whiteSpace: 'nowrap',
         },
-        '& .MuiTableHead-root .MuiTableCell-root:first-of-type, & .MuiTableBody-root .MuiTableCell-root:first-of-type': {
+        '& .MuiTableHead-root .MuiTableCell-root:first-of-type': {
           width: '48px',
-          padding: '0 0 0 14px', // Add left padding to align with sidebar button
+          padding: '0 0 0 14px',
         },
         '& .MuiTableBody-root .MuiTableRow-root': {
           '&:hover': {
@@ -191,6 +361,7 @@ const TableView: React.FC<TableViewProps> = ({
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 1,
+                justifyContent: 'flex-start', // Left align header content
                 color: theme.palette.mode === 'dark'
                   ? theme.palette.primary.light
                   : theme.palette.primary.dark
@@ -211,6 +382,7 @@ const TableView: React.FC<TableViewProps> = ({
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 1,
+                justifyContent: 'flex-start', // Left align header content
                 color: theme.palette.mode === 'dark'
                   ? theme.palette.secondary.light
                   : theme.palette.secondary.dark
@@ -231,6 +403,7 @@ const TableView: React.FC<TableViewProps> = ({
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 1,
+                justifyContent: 'flex-start', // Left align header content
                 color: theme.palette.mode === 'dark'
                   ? theme.palette.success.light
                   : theme.palette.success.dark
@@ -245,9 +418,9 @@ const TableView: React.FC<TableViewProps> = ({
           {qaPairs
             .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
             .map((qa, rowIndex) => {
-              const isAnyExpanded = ['context', 'question', 'answer'].some(
-                columnType => expandedCells[`${qa.id}-${columnType}`] || isCellGenerating(qa, columnType)
-              );
+              // const isAnyExpanded = ['context', 'question', 'answer'].some(
+              //   columnType => expandedCells[`${qa.id}-${columnType}`] || isCellGenerating(qa, columnType)
+              // );
 
               return (
                 <TableRow 
@@ -275,21 +448,33 @@ const TableView: React.FC<TableViewProps> = ({
                   </TableCell>
                   {['context', 'question', 'answer'].map((columnType) => {
                     const isGeneratingCell = isCellGenerating(qa, columnType);
-                    const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGeneratingCell;
                     const content = qa[columnType as keyof typeof qa] as string;
+                    const isHtmlContent = columnType === 'context' && content.includes('<div class="pdf-page-image">');
+                    const isExpanded = expandedCells[`${qa.id}-${columnType}`] || isGeneratingCell || isHtmlContent;
+                    
+                    // Extract image info if this is an HTML content cell
+                    const imageInfo = isHtmlContent ? extractImageInfo(content) : null;
+                    
+                    // Create a unique key for this image container if needed
+                    const imageRefKey = imageInfo ? `${qa.id}||${imageInfo.url}||${imageInfo.pageNumber}` : '';
                     
                     return (
                       <TableCell 
                         key={columnType}
                         onClick={() => onToggleCellExpansion(qa.id, columnType)}
+                        data-qa-id={qa.id}
+                        data-column-type={columnType}
                         sx={{ 
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
-                          padding: '12px 16px',
-                          minWidth: '200px',
-                          maxWidth: '400px',
+                          padding: '8px 12px',
+                          width: '100%',
+                          height: '180px', // Increased from 120px
+                          maxHeight: '180px', // Increased from 120px
                           position: 'relative',
-                          height: isAnyExpanded ? 'auto' : undefined,
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-word',
+                          overflow: 'hidden', // Changed from auto to hidden
                           '&:hover': {
                             backgroundColor: theme.palette.mode === 'dark' 
                               ? 'rgba(255, 255, 255, 0.04)'
@@ -304,10 +489,12 @@ const TableView: React.FC<TableViewProps> = ({
                       >
                         <Box sx={{ 
                           position: 'relative',
-                          maxHeight: isAnyExpanded ? (isExpanded ? 'none' : '100%') : '4.5em',
-                          overflow: isExpanded ? 'visible' : 'auto',
+                          height: '160px', // Adjusted for new row height
+                          maxHeight: '160px',
+                          overflow: 'hidden', // Prevent scrolling
                           transition: 'all 0.2s ease',
-                          height: isAnyExpanded ? (isExpanded ? 'auto' : '100%') : '4.5em',
+                          display: 'block',
+                          width: '100%',
                           '&::-webkit-scrollbar': {
                             width: '8px',
                             height: '8px',
@@ -331,37 +518,139 @@ const TableView: React.FC<TableViewProps> = ({
                           },
                           overflowY: 'scroll'
                         }}>
-                          <TextField
-                            multiline
-                            fullWidth
-                            variant="standard"
-                            value={content}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleCellChange(qa.id, columnType, e.target.value);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            InputProps={{
-                              disableUnderline: true,
-                              sx: {
-                                alignItems: 'flex-start',
-                                padding: 0,
+                          {isHtmlContent ? (
+                            <Box 
+                              sx={{ 
+                                width: isHtmlContent ? 'max-content' : '100%', 
                                 fontSize: '0.875rem',
                                 lineHeight: 1.5,
-                                minHeight: isExpanded ? 'auto' : '4.5em',
-                                backgroundColor: 'transparent',
-                                '& textarea': {
-                                  padding: 0,
+                                minHeight: '2em',
+                                display: 'block',
+                                height: '160px',
+                                maxHeight: '160px',
+                                overflow: 'hidden',
+                                textAlign: 'left',
+                                '& img': {
+                                  width: '100%',
+                                  height: '100%', // Changed from fixed height
+                                  objectFit: 'contain',
+                                  display: 'block',
+                                  margin: '0',
+                                  marginRight: 'auto',
+                                  borderRadius: '3px',
+                                  boxShadow: theme.palette.mode === 'dark' 
+                                    ? '0 1px 4px rgba(0,0,0,0.5)' 
+                                    : '0 1px 4px rgba(0,0,0,0.15)',
+                                },
+                                '& .pdf-page-image': {
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  borderRadius: '4px',
+                                  padding: '4px',
+                                  margin: '2px 0',
+                                  width: '100%',
+                                  height: '100%', // Changed from fixed height
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'flex-start',
+                                  backgroundColor: theme.palette.mode === 'dark' 
+                                    ? 'rgba(0, 0, 0, 0.2)' 
+                                    : 'rgba(0, 0, 0, 0.03)',
+                                  '& img': {
+                                    margin: '0',
+                                    marginRight: 'auto',
+                                    width: '100%',
+                                    height: '100%', // Changed from fixed height
+                                    objectFit: 'contain',
+                                    maxWidth: '100%',
+                                    maxHeight: '100%'
+                                  }
+                                },
+                                '& .page-number': {
+                                  fontSize: '0.75rem',
+                                  color: theme.palette.text.secondary,
+                                  marginBottom: '4px',
+                                  fontWeight: 500,
+                                },
+                                '& p': {
+                                  margin: '8px 0',
+                                  fontWeight: 500,
                                 }
-                              }
-                            }}
-                            sx={{
-                              width: '100%',
-                              '& .MuiInputBase-root': {
-                                padding: 0,
-                              },
-                            }}
-                          />
+                              }}
+                              dangerouslySetInnerHTML={{ __html: content }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (imageInfo) {
+                                  setViewerImageUrl(imageInfo.url);
+                                  setViewerPageNumber(imageInfo.pageNumber);
+                                  setImageViewerOpen(true);
+                                  onToggleCellExpansion(qa.id, columnType);
+                                } else {
+                                  // Try one more method to extract image information
+                                  // This helps with cropped regions that might not be detected by extractImageInfo
+                                  const img = (e.target as HTMLElement).closest('img');
+                                  if (img) {
+                                    const imageUrl = (img as HTMLImageElement).src;
+                                    let pageNumber = 1;
+                                    
+                                    // Try to find page number in a nearby .page-number element
+                                    const container = (e.target as HTMLElement).closest('.pdf-page-image');
+                                    const pageNumberEl = container?.querySelector('.page-number');
+                                    if (pageNumberEl) {
+                                      const pageMatch = pageNumberEl.textContent?.match(/Page (\d+)(?:\s*\(Region \d+\))?/);
+                                      if (pageMatch) {
+                                        pageNumber = parseInt(pageMatch[1], 10);
+                                      }
+                                    }
+                                    
+                                    setViewerImageUrl(imageUrl);
+                                    setViewerPageNumber(pageNumber);
+                                    setImageViewerOpen(true);
+                                  } else {
+                                    onToggleCellExpansion(qa.id, columnType);
+                                  }
+                                }
+                              }}
+                              ref={(node: HTMLDivElement | null) => {
+                                if (node && imageInfo) {
+                                  imageRefs.current.set(imageRefKey, node);
+                                } else if (!node && imageInfo) {
+                                  imageRefs.current.delete(imageRefKey);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <TextField
+                              multiline
+                              fullWidth
+                              variant="standard"
+                              value={content}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleCellChange(qa.id, columnType, e.target.value);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              InputProps={{
+                                disableUnderline: true,
+                                sx: {
+                                  alignItems: 'flex-start',
+                                  padding: 0,
+                                  fontSize: '0.875rem',
+                                  lineHeight: 1.5,
+                                  minHeight: isExpanded ? 'auto' : '4.5em',
+                                  backgroundColor: 'transparent',
+                                  '& textarea': {
+                                    padding: 0,
+                                  }
+                                }
+                              }}
+                              sx={{
+                                width: '100%',
+                                '& .MuiInputBase-root': {
+                                  padding: 0,
+                                },
+                              }}
+                            />
+                          )}
                         </Box>
                       </TableCell>
                     );
@@ -397,6 +686,15 @@ const TableView: React.FC<TableViewProps> = ({
             : alpha(theme.palette.background.paper, 0.6),
           backdropFilter: 'blur(8px)',
         }}
+      />
+      
+      {/* Add the ImageViewerDialog */}
+      <ImageViewerDialog
+        open={imageViewerOpen}
+        onClose={() => setImageViewerOpen(false)}
+        imageUrl={viewerImageUrl}
+        pageNumber={viewerPageNumber}
+        onRegionSelect={handleImageRegionSelect}
       />
     </TableContainer>
   );
